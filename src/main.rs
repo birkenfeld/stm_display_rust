@@ -11,9 +11,10 @@ extern crate nb;
 extern crate btoi;
 extern crate embedded_hal as hal_base;
 extern crate cortex_m as arm;
+#[macro_use]
 extern crate stm32f429 as stm;
 extern crate stm32f429_hal as hal;
-use stm::RCC;
+use stm::{LTDC, RCC, TIM3};
 
 use core::fmt::Write;
 
@@ -64,13 +65,16 @@ const ILI9341_3GAMMA_EN: u8 = 0xF2;
 const ILI9341_INTERFACE: u8 = 0xF6;
 const ILI9341_PRC: u8 = 0xF7;
 
+// main framebuffer
 static mut FRAMEBUF: [u16; 250*320] = [0; 250*320];
 
 fn main() -> ! {
     // let mut stdout = hio::hstdout().unwrap();
-    let pa = arm::Peripherals::take().unwrap();
+    let mut pa = arm::Peripherals::take().unwrap();
     let p = stm::Peripherals::take().unwrap();
     // writeln!(stdout, "start...").unwrap();
+    // cursor framebuffer, just the cursor itself
+    static mut CURSORBUF: [u16; 6] = [R1|G1|B1; 6];
 
     // configure clock
     let mut rcc = p.RCC.constrain();
@@ -142,12 +146,12 @@ fn main() -> ! {
     // enable DMA2D clock
     rcc_raw.ahb1enr.modify(|_, w| w.dma2den().bit(true));
     // enable PLLSAI
-    	/* Configure PLLSAI prescalers for LCD */
-	/* Enable Pixel Clock */
-	/* PLLSAI_VCO Input = HSE_VALUE/PLL_M = 1 Mhz */
-	/* PLLSAI_VCO Output = PLLSAI_VCO Input * PLLSAI_N = 192 Mhz */
-	/* PLLLCDCLK = PLLSAI_VCO Output/PLLSAI_R = 192/4 = 96 Mhz */
-	/* LTDC clock frequency = PLLLCDCLK / RCC_PLLSAIDivR = 96/4 = 24 Mhz */
+    /* Configure PLLSAI prescalers for LCD */
+	  /* Enable Pixel Clock */
+	  /* PLLSAI_VCO Input = HSE_VALUE/PLL_M = 1 Mhz */
+	  /* PLLSAI_VCO Output = PLLSAI_VCO Input * PLLSAI_N = 192 Mhz */
+	  /* PLLLCDCLK = PLLSAI_VCO Output/PLLSAI_R = 192/4 = 96 Mhz */
+	  /* LTDC clock frequency = PLLLCDCLK / RCC_PLLSAIDivR = 96/4 = 24 Mhz */
     rcc_raw.pllsaicfgr.write(|w| unsafe { w.pllsain().bits(192)
                                        .pllsaiq().bits(7)
                                        .pllsair().bits(4) });
@@ -172,56 +176,43 @@ fn main() -> ! {
     // Background color
     p.LTDC.bccr.write(|w| unsafe { w.bc().bits(0x00FF00) });
 
-    // Configure layer1
+    // Configure layer1 (main framebuffer)
 
     // Horizontal start/stop
-    p.LTDC.l1whpcr.write(|w| unsafe { w.whstpos().bits(30).whsppos().bits(269) });
+    p.LTDC.l1whpcr .write(|w| unsafe { w.whstpos().bits(30).whsppos().bits(269) });
     // Vertical start/stop
-    p.LTDC.l1wvpcr.write(|w| unsafe { w.wvstpos().bits(4).wvsppos().bits(323) });
+    p.LTDC.l1wvpcr .write(|w| unsafe { w.wvstpos().bits(4).wvsppos().bits(323) });
     // Pixel format
-    p.LTDC.l1pfcr.write(|w| unsafe { w.pf().bits(0b010) }); // RGB-565
+    p.LTDC.l1pfcr  .write(|w| unsafe { w.pf().bits(0b010) }); // RGB-565
     // Constant alpha value
-    p.LTDC.l1cacr.write(|w| unsafe { w.consta().bits(255) });
+    p.LTDC.l1cacr  .write(|w| unsafe { w.consta().bits(255) });
     // Default color values
-    p.LTDC.l1dccr.write(|w| unsafe { w.dcalpha().bits(0).dcred().bits(0).dcgreen().bits(0).dcblue().bits(0) });
+    p.LTDC.l1dccr  .write(|w| unsafe { w.dcalpha().bits(0).dcred().bits(0).dcgreen().bits(0).dcblue().bits(0) });
     // Blending factors
-    p.LTDC.l1bfcr.write(|w| unsafe { w.bf1().bits(4).bf2().bits(5) }); // Constant alpha
+    p.LTDC.l1bfcr  .write(|w| unsafe { w.bf1().bits(4).bf2().bits(5) }); // Constant alpha
     // Color frame buffer start address
-    p.LTDC.l1cfbar.write(|w| unsafe { w.cfbadd().bits(FRAMEBUF.as_ptr() as u32) }); // XXX
+    p.LTDC.l1cfbar .write(|w| unsafe { w.cfbadd().bits(FRAMEBUF.as_ptr() as u32) });
     // Color frame buffer line length (active*bpp + 3), and pitch
-    p.LTDC.l1cfblr.write(|w| unsafe { w.cfbll().bits(240*2 + 3).cfbp().bits(250*2) });
+    p.LTDC.l1cfblr .write(|w| unsafe { w.cfbll().bits(240*2 + 3).cfbp().bits(250*2) });
     // Frame buffer number of lines
     p.LTDC.l1cfblnr.write(|w| unsafe { w.cfblnbr().bits(320) });
 
-    // Configure layer2
+    // Configure layer2 (cursor)
 
-/*
-    // Horizontal start/stop
-    p.LTDC.l2whpcr.write(|w| unsafe { w.whstpos().bits(30).whsppos().bits(269) });
-    // Vertical start/stop
-    p.LTDC.l2wvpcr.write(|w| unsafe { w.wvstpos().bits(4).wvsppos().bits(323) });
-    // Pixel format
-    p.LTDC.l2pfcr.write(|w| unsafe { w.pf().bits(0b010) }); // RGB-565
-    // Constant alpha value
-    p.LTDC.l2cacr.write(|w| unsafe { w.consta().bits(0) });
-    // Default color values
-    p.LTDC.l2dccr.write(|w| unsafe { w.dcalpha().bits(0).dcred().bits(0).dcgreen().bits(0).dcblue().bits(0) });
-    // Blending factors
-    p.LTDC.l2bfcr.write(|w| unsafe { w.bf1().bits(6).bf2().bits(7) }); // Constant alpha * Pixel alpha
-    // Color frame buffer start address
-    p.LTDC.l2cfbar.write(|w| unsafe { w.cfbadd().bits(FRAMEBUF.as_ptr() as u32) }); // XXX
-    // Color frame buffer line length (active*bpp + 3), and pitch
-    p.LTDC.l2cfblr.write(|w| unsafe { w.cfbll().bits(240*2 + 3).cfbp().bits(240*2) });
-    // Frame buffer number of lines
-    p.LTDC.l2cfblnr.write(|w| unsafe { w.cfblnbr().bits(320) });
+    // initial position: top left character
+    p.LTDC.l2whpcr .write(|w| unsafe { w.whstpos().bits(30 + 9).whsppos().bits(30 + 9) });
+    p.LTDC.l2wvpcr .write(|w| unsafe { w.wvstpos().bits(4).wvsppos().bits(4 + 6 - 1) });
+    p.LTDC.l2pfcr  .write(|w| unsafe { w.pf().bits(0b010) }); // RGB-565
+    p.LTDC.l2cacr  .write(|w| unsafe { w.consta().bits(255) });
+    p.LTDC.l2dccr  .write(|w| unsafe { w.dcalpha().bits(0).dcred().bits(0).dcgreen().bits(0).dcblue().bits(0) });
+    p.LTDC.l2bfcr  .write(|w| unsafe { w.bf1().bits(6).bf2().bits(7) }); // Constant alpha * Pixel alpha
+    p.LTDC.l2cfbar .write(|w| unsafe { w.cfbadd().bits(CURSORBUF.as_ptr() as u32) });
+    p.LTDC.l2cfblr .write(|w| unsafe { w.cfbll().bits(1*2 + 3).cfbp().bits(1*2) });
+    p.LTDC.l2cfblnr.write(|w| unsafe { w.cfblnbr().bits(6) });
 
-    // Reload config
-    p.LTDC.srcr.write(|w| w.imr().bit(true));
-*/
-
-    // Enable layer1, disable layer2
+    // Enable layer1, disable layer2 initially
     p.LTDC.l1cr.modify(|_, w| w.len().bit(true));
-//    p.LTDC.l2cr.modify(|_, w| w.len().bit(false));
+    p.LTDC.l2cr.modify(|_, w| w.len().bit(false));
 
     // Reload config again
     p.LTDC.srcr.write(|w| w.imr().bit(true));
@@ -307,6 +298,13 @@ fn main() -> ! {
     led1.set_high();
     led2.set_low();
 
+    // enable timer interrupt
+    pa.NVIC.enable(stm::Interrupt::TIM3);
+
+    // set up blinking timer
+    let mut timer = hal::timer::Timer::tim3(p.TIM3, Hertz(4), clocks, &mut rcc.apb1);
+    timer.listen(hal::timer::Event::TimeOut);
+
     const B1: u16 = 0b01111  << 11;
     const G1: u16 = 0b011111 << 5;
     const R1: u16 = 0b01111;
@@ -335,6 +333,16 @@ fn main() -> ! {
     let mut escape = 0;
     let mut escape_len = 0;
     let mut escape_seq = [0u8; 12];
+
+    fn cursor(cx: u16, cy: u16) {
+        let ltdc_raw = unsafe { &*LTDC::ptr() };
+        ltdc_raw.l2whpcr .write(|w| unsafe { w.whstpos().bits(30 + 9 + cy*CHARH)
+                                              .whsppos().bits(30 + 9 + cy*CHARH) });
+        ltdc_raw.l2wvpcr .write(|w| unsafe { w.wvstpos().bits(4 + cx*CHARW)
+                                             .wvsppos().bits(4 + 6 - 1 + cx*CHARW) });
+        // reload on next vsync
+        ltdc_raw.srcr.write(|w| w.vbr().bit(true));
+    }
 
     fn draw(cx: u16, cy: u16, ch: u8, color: u16, bkgrd: u16) {
         FONT[ch as usize].iter().zip(cy*CHARH..(cy+1)*CHARH).for_each(|(charrow, y)| {
@@ -394,7 +402,6 @@ fn main() -> ! {
     draw(COLS-3, 1, b'O', G2, B2);
     draw(COLS-2, 1, b'K', G2, B2);
 
-    draw(cx, cy, CURSOR, color, bkgrd);
     loop {
         while let Ok(ch) = console_rx.read() {
             block!(console_tx.write(ch)).unwrap();
@@ -411,10 +418,9 @@ fn main() -> ! {
                         escape = 0;
                     }
                 } else {
-                    draw(cx, cy, b' ', color, bkgrd); // erase cursor
                     process_escape(ch, &escape_seq[..escape_len],
                                    &mut cx, &mut cy, &mut color, &mut bkgrd);
-                    draw(cx, cy, CURSOR, color, bkgrd); // draw new cursor
+                    cursor(cx, cy);
                     escape = 0;
                 }
                 continue;
@@ -423,7 +429,6 @@ fn main() -> ! {
             if ch == b'\r' {
                 // do nothing
             } else if ch == b'\n' {
-                draw(cx, cy, b' ', color, bkgrd); // erase cursor
                 cx = 0;
                 cy += 1;
                 if cy == ROWS {
@@ -432,25 +437,40 @@ fn main() -> ! {
                     while p.DMA2D.cr.read().start().bit_is_set() {}
                     cy -= 1;
                 }
-                draw(cx, cy, CURSOR, color, bkgrd);
+                cursor(cx, cy);
             } else if ch == b'\x08' {
                 if cx > 0 {
-                    draw(cx, cy, b' ', color, bkgrd); // erase cursor
                     cx -= 1;
-                    draw(cx, cy, CURSOR, color, bkgrd);
+                    draw(cx, cy, b' ', color, bkgrd);
+                    cursor(cx, cy);
                 }
             } else if ch == b'\x1b' {
                 escape = 1;
             } else {
                 draw(cx, cy, ch, color, bkgrd);
                 cx = (cx + 1) % COLS;
-                draw(cx, cy, CURSOR, color, bkgrd);
+                cursor(cx, cy);
             }
             if cx % 2 == 0 { led2.set_low(); } else { led2.set_high(); }
         }
     }
 }
 
+interrupt!(TIM3, blink, state: bool = false);
+
+#[inline(always)]
+fn blink(st: &mut bool) {
+    // toggle layer2
+    *st = !*st;
+    let ltdc_raw = unsafe { &*LTDC::ptr() };
+    ltdc_raw.l2cr.modify(|_, w| w.len().bit(*st));
+    // reload on next vsync
+    ltdc_raw.srcr.write(|w| w.vbr().bit(true));
+    // reset interrupt
+    let tim3_raw = unsafe { &*TIM3::ptr() };
+    tim3_raw.sr.modify(|_, w| w.uif().clear_bit());
+    tim3_raw.cr1.modify(|_, w| w.cen().set_bit());
+}
 
 exception!(HardFault, hard_fault);
 
