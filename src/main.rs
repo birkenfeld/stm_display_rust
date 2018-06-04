@@ -8,6 +8,7 @@ extern crate cortex_m_semihosting as sh;
 extern crate panic_semihosting;
 #[macro_use]
 extern crate nb;
+extern crate btoi;
 extern crate embedded_hal as hal_base;
 extern crate cortex_m as arm;
 extern crate stm32f429 as stm;
@@ -19,6 +20,7 @@ use core::fmt::Write;
 
 use rt::ExceptionFrame;
 use sh::hio;
+use btoi::btoi;
 use hal::time::*;
 use hal::delay::Delay;
 use hal::rcc::RccExt;
@@ -65,7 +67,6 @@ const ILI9341_PRC: u8 = 0xF7;
 static mut FRAMEBUF: [u16; 240*320] = [0; 240*320];
 
 fn main() -> ! {
-
     let mut stdout = hio::hstdout().unwrap();
     let pa = arm::Peripherals::take().unwrap();
     let p = stm::Peripherals::take().unwrap();
@@ -104,7 +105,7 @@ fn main() -> ! {
     let utx = gpioa.pa9 .into_af7(&mut gpioa.moder, &mut gpioa.afrh);
     let urx = gpioa.pa10.into_af7(&mut gpioa.moder, &mut gpioa.afrh);
     let mut console_uart = hal::serial::Serial::usart1(p.USART1, (utx, urx),
-        hal::time::Bps(69120), clocks, &mut rcc.apb2);
+        hal::time::Bps(17280), clocks, &mut rcc.apb2);
     let (mut console_tx, mut console_rx) = console_uart.split();
 
     // LCD pins
@@ -309,21 +310,26 @@ fn main() -> ! {
     const CHARH: u16 = 10;
     const CHARW: u16 = 6;
     const CURSOR: u8 = b'\n';
+    const DEFAULT_COLOR: u16 = R1|G1|B1;
+    const DEFAULT_BKGRD: u16 = 0;
     let mut cx = 0;
     let mut cy = 0;
-    let mut color = R1|G1|B1;
-    let mut bgcolor = 0;
+    let mut color = DEFAULT_COLOR;
+    let mut bkgrd = DEFAULT_BKGRD;
+    let mut escape = 0;
+    let mut escape_len = 0;
+    let mut escape_seq = [0u8; 12];
 
-    fn draw(cx: u16, cy: u16, ch: u8, color: u16, bgcolor: u16) {
+    fn draw(cx: u16, cy: u16, ch: u8, color: u16, bkgrd: u16) {
         FONT[ch as usize].iter().zip(cy*CHARH..(cy+1)*CHARH).for_each(|(charrow, y)| {
             (0..CHARW).for_each(|x| unsafe {
                 FRAMEBUF[(x + cx*CHARW) as usize * HEIGHT + y as usize] =
-                    if charrow & (1 << (CHARW - 1 - x)) != 0 { color } else { bgcolor };
+                    if charrow & (1 << (CHARW - 1 - x)) != 0 { color } else { bkgrd };
             });
         });
     }
 
-    fn scroll(by: u16, bgcolor: u16) {
+    fn scroll(by: u16, bkgrd: u16) {
         let by = by as usize;
         for x in 0..WIDTH {
             let start = x * HEIGHT;
@@ -332,39 +338,108 @@ fn main() -> ! {
                           FRAMEBUF.as_mut_ptr().offset(start as isize),
                           HEIGHT - by);
                 for y in 1..by+1 {
-                    FRAMEBUF[(x+1)*HEIGHT - y] = bgcolor;
+                    FRAMEBUF[(x+1)*HEIGHT - y] = bkgrd;
                 }
             }
         }
     }
 
-    draw(cx, cy, CURSOR, color, bgcolor);
+    fn process_escape(end: u8, seq: &[u8], cx: &mut u16, cy: &mut u16, color: &mut u16, bkgrd: &mut u16) {
+        let mut args = seq.split(|&v| v == b';').map(|n| btoi(n).unwrap_or(0));
+        match end {
+            b'm' => for arg in args {
+                match arg {
+                    0  => { *color = DEFAULT_COLOR; *bkgrd = DEFAULT_BKGRD; }
+                    1  => { *color |= 0b10000_100000_10000; } // WRONG
+                    22 => { *color &= !0b10000_100000_10000; }
+                    30...37 => { *color = LUT[arg as usize - 30]; }
+                    40...47 => { *bkgrd = LUT[arg as usize - 40]; }
+                    _ => {}
+                }
+            },
+            b'H' | b'f' => {
+                let y = args.next().unwrap_or(1);
+                let x = args.next().unwrap_or(1);
+                *cx = if x > 0 { x-1 } else { 0 };
+                *cy = if y > 0 { y-1 } else { 0 };
+            },
+            b'A' => {
+                let n = args.next().unwrap_or(1).max(1);
+                *cy -= n.min(*cy);
+            },
+            b'B' => {
+                let n = args.next().unwrap_or(1).max(1);
+                *cy += n.min(ROWS - *cy - 1);
+            },
+            b'C' => {
+                let n = args.next().unwrap_or(1).max(1);
+                *cx += n.min(COLS - *cx - 1);
+            },
+            b'D' => {
+                let n = args.next().unwrap_or(1).max(1);
+                *cx -= n.min(*cx);
+            },
+            b'G' => {
+                let x = args.next().unwrap_or(1).max(1);
+                *cx = x-1;
+            }
+            b'J' => {}, // TODO: erase screen
+            b'K' => {}, // TODO: erase line
+            // otherwise, ignore
+            _    => {}
+        }
+    }
+
+    draw(cx, cy, CURSOR, color, bkgrd);
     loop {
         while let Ok(ch) = console_rx.read() {
             block!(console_tx.write(ch)).unwrap();
 
+            if escape == 1 {
+                escape_len = 0;
+                escape = if ch == b'[' { 2 } else { 0 };
+                continue;
+            } else if escape == 2 {
+                if (ch >= b'0' && ch <= b'9') || ch == b';' {
+                    escape_seq[escape_len] = ch;
+                    escape_len += 1;
+                    if escape_len == escape_seq.len() {
+                        escape = 0;
+                    }
+                } else {
+                    draw(cx, cy, b' ', color, bkgrd); // erase cursor
+                    process_escape(ch, &escape_seq[..escape_len],
+                                   &mut cx, &mut cy, &mut color, &mut bkgrd);
+                    draw(cx, cy, CURSOR, color, bkgrd); // draw new cursor
+                    escape = 0;
+                }
+                continue;
+            }
+
             if ch == b'\r' {
                 // do nothing
             } else if ch == b'\n' {
-                draw(cx, cy, b' ', color, bgcolor); // erase cursor
+                draw(cx, cy, b' ', color, bkgrd); // erase cursor
                 cx = 0;
                 cy += 1;
                 if cy == ROWS {
                     // scroll one row
-                    scroll(CHARH, bgcolor);
+                    scroll(CHARH, bkgrd);
                     cy -= 1;
                 }
-                draw(cx, cy, CURSOR, color, bgcolor);
+                draw(cx, cy, CURSOR, color, bkgrd);
             } else if ch == b'\x08' {
                 if cx > 0 {
-                    draw(cx, cy, b' ', color, bgcolor); // erase cursor
+                    draw(cx, cy, b' ', color, bkgrd); // erase cursor
                     cx -= 1;
-                    draw(cx, cy, CURSOR, color, bgcolor);
+                    draw(cx, cy, CURSOR, color, bkgrd);
                 }
+            } else if ch == b'\x1b' {
+                escape = 1;
             } else {
-                draw(cx, cy, ch, color, bgcolor);
+                draw(cx, cy, ch, color, bkgrd);
                 cx = (cx + 1) % COLS;
-                draw(cx, cy, CURSOR, color, bgcolor);
+                draw(cx, cy, CURSOR, color, bkgrd);
             }
             if cx % 2 == 0 { led2.set_low(); } else { led2.set_high(); }
         }
