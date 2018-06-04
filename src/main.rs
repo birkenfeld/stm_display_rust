@@ -1,6 +1,6 @@
 #![no_main]
 #![no_std]
-#![allow(unused)]
+//#![allow(unused)]
 
 #[macro_use]
 extern crate cortex_m_rt as rt;
@@ -67,108 +67,66 @@ fn main() -> ! {
     let p = stm::Peripherals::take().unwrap();
     writeln!(stdout, "start...").unwrap();
 
+    // configure clock
     let mut rcc = p.RCC.constrain();
+    rcc.cfgr = rcc.cfgr.hclk(MegaHertz(176)).sysclk(MegaHertz(176)).pclk1(MegaHertz(44)).pclk2(MegaHertz(88));
     let mut flash = p.FLASH.constrain();
     let clocks = rcc.cfgr.freeze(&mut flash.acr);
+    let mut time = Delay::new(pa.SYST, clocks);
 
-unsafe {
-    for i in 0..1 {
-        let base = (0x4002_0000 + i*0x400) as *const u32;
-        writeln!(stdout, "GPIO {}: {:#010x} {:#010x} {:#010x} {:#010x}", i,
-                 ptr::read_volatile(base), ptr::read_volatile(base.offset(1)),
-                 ptr::read_volatile(base.offset(2)), ptr::read_volatile(base.offset(3))).unwrap();
-    }
-}
+    let mut gpioa = p.GPIOA.split(&mut rcc.ahb1);
+    let mut gpiob = p.GPIOB.split(&mut rcc.ahb1);
+    let mut gpioc = p.GPIOC.split(&mut rcc.ahb1);
+    let mut gpiod = p.GPIOD.split(&mut rcc.ahb1);
+    let mut gpiof = p.GPIOF.split(&mut rcc.ahb1);
+    let mut gpiog = p.GPIOG.split(&mut rcc.ahb1);
 
-    // configure LCD pins
-    p.GPIOA.moder.modify(|_, w| unsafe {
-        w.moder3().bits(0b10).moder4().bits(0b10).moder6().bits(0b10).moder11().bits(0b10).moder12().bits(0b10)
-    });
-    p.GPIOA.ospeedr.modify(|_, w| unsafe {
-        w.ospeedr3().bits(0b10).ospeedr4().bits(0b10).ospeedr6().bits(0b10).ospeedr11().bits(0b10).ospeedr12().bits(0b10)
-    });
-    p.GPIOA.afrl.modify(|_, w| unsafe {
-        w.afrl3().bits(0xE).afrl4().bits(0xE).afrl6().bits(0xE)
-    });
-    p.GPIOA.afrh.modify(|_, w| unsafe {
-        w.afrh11().bits(0xE).afrh12().bits(0xE)
-    });
+    // LEDs
+    let mut led1 = gpiog.pg13.into_push_pull_output(&mut gpiog.moder, &mut gpiog.otyper);
+    let mut led2 = gpiog.pg14.into_push_pull_output(&mut gpiog.moder, &mut gpiog.otyper);
 
-    p.GPIOB.moder.modify(|_, w| unsafe {
-        w.moder0().bits(0b10).moder1().bits(0b10).moder8().bits(0b10).moder9().bits(0b10).moder10().bits(0b10).moder11().bits(0b10)
-    });
-    p.GPIOB.ospeedr.modify(|_, w| unsafe {
-        w.ospeedr0().bits(0b10).ospeedr1().bits(0b10).ospeedr8().bits(0b10).ospeedr9().bits(0b10).ospeedr10().bits(0b10).ospeedr11().bits(0b10)
-    });
-    p.GPIOB.afrl.modify(|_, w| unsafe {
-        w.afrl0().bits(0x9).afrl1().bits(0x9)
-    });
-    p.GPIOB.afrh.modify(|_, w| unsafe {
-        w.afrh8().bits(0xE).afrh9().bits(0xE).afrh10().bits(0xE).afrh11().bits(0xE)
-    });
+    // LCD SPI
+    let mut cs = gpioc.pc2.into_push_pull_output(&mut gpioc.moder, &mut gpioc.otyper);
+    let mut ds = gpiod.pd13.into_push_pull_output(&mut gpiod.moder, &mut gpiod.otyper);
+    let sclk = gpiof.pf7.into_af5(&mut gpiof.moder, &mut gpiof.afrl);
+    let miso = gpiof.pf8.into_af5(&mut gpiof.moder, &mut gpiof.afrl);
+    let mosi = gpiof.pf9.into_af5(&mut gpiof.moder, &mut gpiof.afrh);
+    let mut display_spi = hal::spi::Spi::spi5(p.SPI5, (sclk, miso, mosi),
+                                              hal_base::spi::Mode {
+                                                  polarity: hal_base::spi::Polarity::IdleLow,
+                                                  phase: hal_base::spi::Phase::CaptureOnFirstTransition
+                                              },
+                                              MegaHertz(1), clocks, &mut rcc.apb2);
 
-    p.GPIOC.moder.modify(|_, w| unsafe {
-        w.moder6().bits(0b10).moder7().bits(0b10).moder10().bits(0b10)
-    });
-    p.GPIOC.ospeedr.modify(|_, w| unsafe {
-        w.ospeedr6().bits(0b10).ospeedr7().bits(0b10).ospeedr10().bits(0b10)
-    });
-    p.GPIOC.afrl.modify(|_, w| unsafe {
-        w.afrl6().bits(0xE).afrl7().bits(0xE)
-    });
-    p.GPIOC.afrh.modify(|_, w| unsafe {
-        w.afrh10().bits(0xE)
-    });
-
-    p.GPIOD.moder.modify(|_, w| unsafe {
-        w.moder3().bits(0b10).moder6().bits(0b10)
-    });
-    p.GPIOD.ospeedr.modify(|_, w| unsafe {
-        w.ospeedr3().bits(0b10).ospeedr6().bits(0b10)
-    });
-    p.GPIOD.afrl.modify(|_, w| unsafe {
-        w.afrl3().bits(0xE).afrl6().bits(0xE)
-    });
-
-    p.GPIOF.moder.modify(|_, w| unsafe {
-        w.moder10().bits(0b10)
-    });
-    p.GPIOF.ospeedr.modify(|_, w| unsafe {
-        w.ospeedr10().bits(0b10)
-    });
-    p.GPIOF.afrh.modify(|_, w| unsafe {
-        w.afrh10().bits(0xE)
-    });
-
-    p.GPIOG.moder.modify(|_, w| unsafe {
-        w.moder6().bits(0b10).moder7().bits(0b10).moder10().bits(0b10).moder11().bits(0b10).moder12().bits(0b10)
-    });
-    p.GPIOG.ospeedr.modify(|_, w| unsafe {
-        w.ospeedr6().bits(0b10).ospeedr7().bits(0b10).ospeedr10().bits(0b10).ospeedr11().bits(0b10).ospeedr12().bits(0b10)
-    });
-    p.GPIOG.afrl.modify(|_, w| unsafe {
-        w.afrl6().bits(0xE).afrl7().bits(0xE)
-    });
-    p.GPIOG.afrh.modify(|_, w| unsafe {
-        w.afrh11().bits(0xE).afrh10().bits(0x9).afrh12().bits(0x9)
-    });
-
-    use core::ptr;
-
-unsafe {
-    for i in 0..1 {
-        let base = (0x4002_0000 + i*0x400) as *const u32;
-        writeln!(stdout, "GPIO {}: {:#010x} {:#010x} {:#010x} {:#010x}", i,
-                 ptr::read_volatile(base), ptr::read_volatile(base.offset(1)),
-                 ptr::read_volatile(base.offset(2)), ptr::read_volatile(base.offset(3))).unwrap();
-    }
-}
+    // LCD pins
+    gpioa.pa3 .into_lcd(&mut gpioa.moder, &mut gpioa.ospeedr, &mut gpioa.afrl, 0xE);
+    gpioa.pa4 .into_lcd(&mut gpioa.moder, &mut gpioa.ospeedr, &mut gpioa.afrl, 0xE);
+    gpioa.pa6 .into_lcd(&mut gpioa.moder, &mut gpioa.ospeedr, &mut gpioa.afrl, 0xE);
+    gpioa.pa11.into_lcd(&mut gpioa.moder, &mut gpioa.ospeedr, &mut gpioa.afrh, 0xE);
+    gpioa.pa12.into_lcd(&mut gpioa.moder, &mut gpioa.ospeedr, &mut gpioa.afrh, 0xE);
+    gpiob.pb0 .into_lcd(&mut gpiob.moder, &mut gpiob.ospeedr, &mut gpiob.afrl, 0x9);
+    gpiob.pb1 .into_lcd(&mut gpiob.moder, &mut gpiob.ospeedr, &mut gpiob.afrl, 0x9);
+    gpiob.pb8 .into_lcd(&mut gpiob.moder, &mut gpiob.ospeedr, &mut gpiob.afrh, 0xE);
+    gpiob.pb9 .into_lcd(&mut gpiob.moder, &mut gpiob.ospeedr, &mut gpiob.afrh, 0xE);
+    gpiob.pb10.into_lcd(&mut gpiob.moder, &mut gpiob.ospeedr, &mut gpiob.afrh, 0xE);
+    gpiob.pb11.into_lcd(&mut gpiob.moder, &mut gpiob.ospeedr, &mut gpiob.afrh, 0xE);
+    gpioc.pc6 .into_lcd(&mut gpioc.moder, &mut gpioc.ospeedr, &mut gpioc.afrl, 0xE);
+    gpioc.pc7 .into_lcd(&mut gpioc.moder, &mut gpioc.ospeedr, &mut gpioc.afrl, 0xE);
+    gpioc.pc10.into_lcd(&mut gpioc.moder, &mut gpioc.ospeedr, &mut gpioc.afrh, 0xE);
+    gpiod.pd3 .into_lcd(&mut gpiod.moder, &mut gpiod.ospeedr, &mut gpiod.afrl, 0xE);
+    gpiod.pd6 .into_lcd(&mut gpiod.moder, &mut gpiod.ospeedr, &mut gpiod.afrl, 0xE);
+    gpiof.pf10.into_lcd(&mut gpiof.moder, &mut gpiof.ospeedr, &mut gpiof.afrh, 0xE);
+    gpiog.pg6 .into_lcd(&mut gpiog.moder, &mut gpiog.ospeedr, &mut gpiog.afrl, 0xE);
+    gpiog.pg7 .into_lcd(&mut gpiog.moder, &mut gpiog.ospeedr, &mut gpiog.afrl, 0xE);
+    gpiog.pg10.into_lcd(&mut gpiog.moder, &mut gpiog.ospeedr, &mut gpiog.afrh, 0x9);
+    gpiog.pg11.into_lcd(&mut gpiog.moder, &mut gpiog.ospeedr, &mut gpiog.afrh, 0xE);
+    gpiog.pg12.into_lcd(&mut gpiog.moder, &mut gpiog.ospeedr, &mut gpiog.afrh, 0x9);
 
     // enable LTDC clock
     let rcc_raw = unsafe { &*RCC::ptr() };
     rcc_raw.apb2enr.modify(|_, w| w.ltdcen().bit(true));
     // enable DMA2D clock
-    rcc_raw.ahb1enr.modify(|_, w| w.dma2den().bit(true));
+    // rcc_raw.ahb1enr.modify(|_, w| w.dma2den().bit(true));
     // enable PLLSAI
     	/* Configure PLLSAI prescalers for LCD */
 	/* Enable Pixel Clock */
@@ -182,10 +140,7 @@ unsafe {
     rcc_raw.dckcfgr.modify(|_, w| unsafe { w.pllsaidivr().bits(0b01) }); // div4
     // enable PLLSAI and wait for it
     rcc_raw.cr.modify(|_, w| w.pllsaion().bit(true));
-    while !rcc_raw.cr.read().pllsairdy().bit() {}
-
-    // writeln!(stdout, "RCC:").unwrap();
-    // for n in 0..
+    while rcc_raw.cr.read().pllsairdy().bit_is_clear() {}
 
     // Vsync, Hsync
     p.LTDC.sscr.write(|w| unsafe { w.vsh().bits(1).hsw().bits(9) });
@@ -201,7 +156,7 @@ unsafe {
                               .depol().bit(false)
                               .pcpol().bit(false));
     // Background color
-    p.LTDC.bccr.write(|w| unsafe { w.bc().bits(0x0000FF) });
+    p.LTDC.bccr.write(|w| unsafe { w.bc().bits(0x00FF00) });
 
     // Configure layer1
 
@@ -212,11 +167,11 @@ unsafe {
     // Pixel format
     p.LTDC.l1pfcr.write(|w| unsafe { w.pf().bits(0b010) }); // RGB-565
     // Constant alpha value
-    p.LTDC.l1cacr.write(|w| unsafe { w.consta().bits(0) });
+    p.LTDC.l1cacr.write(|w| unsafe { w.consta().bits(255) });
     // Default color values
     p.LTDC.l1dccr.write(|w| unsafe { w.dcalpha().bits(0).dcred().bits(0).dcgreen().bits(0).dcblue().bits(0) });
     // Blending factors
-    p.LTDC.l1bfcr.write(|w| unsafe { w.bf1().bits(4).bf2().bits(4) }); // Constant alpha
+    p.LTDC.l1bfcr.write(|w| unsafe { w.bf1().bits(4).bf2().bits(5) }); // Constant alpha
     // Color frame buffer start address
     p.LTDC.l1cfbar.write(|w| unsafe { w.cfbadd().bits(FRAMEBUF.as_ptr() as u32) }); // XXX
     // Color frame buffer line length (active*bpp + 3), and pitch
@@ -226,6 +181,7 @@ unsafe {
 
     // Configure layer2
 
+/*
     // Horizontal start/stop
     p.LTDC.l2whpcr.write(|w| unsafe { w.whstpos().bits(30).whsppos().bits(269) });
     // Vertical start/stop
@@ -237,7 +193,7 @@ unsafe {
     // Default color values
     p.LTDC.l2dccr.write(|w| unsafe { w.dcalpha().bits(0).dcred().bits(0).dcgreen().bits(0).dcblue().bits(0) });
     // Blending factors
-    p.LTDC.l2bfcr.write(|w| unsafe { w.bf1().bits(6).bf2().bits(6) }); // Constant alpha * Pixel alpha
+    p.LTDC.l2bfcr.write(|w| unsafe { w.bf1().bits(6).bf2().bits(7) }); // Constant alpha * Pixel alpha
     // Color frame buffer start address
     p.LTDC.l2cfbar.write(|w| unsafe { w.cfbadd().bits(FRAMEBUF.as_ptr() as u32) }); // XXX
     // Color frame buffer line length (active*bpp + 3), and pitch
@@ -247,45 +203,18 @@ unsafe {
 
     // Reload config
     p.LTDC.srcr.write(|w| w.imr().bit(true));
+*/
 
     // Enable layer1, disable layer2
     p.LTDC.l1cr.modify(|_, w| w.len().bit(true));
-    p.LTDC.l2cr.modify(|_, w| w.len().bit(false));
+//    p.LTDC.l2cr.modify(|_, w| w.len().bit(false));
 
     // Reload config again
     p.LTDC.srcr.write(|w| w.imr().bit(true));
 
-    // HAL wrapped stuff
-    let mut gpioc = p.GPIOC.split(&mut rcc.ahb1);
-    let mut gpiod = p.GPIOD.split(&mut rcc.ahb1);
-    let mut gpiof = p.GPIOF.split(&mut rcc.ahb1);
-    let mut gpiog = p.GPIOG.split(&mut rcc.ahb1);
-
-    let mut time = Delay::new(pa.SYST, clocks);
-
-    let mut cs = gpioc.pc2.into_push_pull_output(&mut gpioc.moder, &mut gpioc.otyper);
-    let mut rst = gpiod.pd12.into_push_pull_output(&mut gpiod.moder, &mut gpiod.otyper);
-    let mut ds = gpiod.pd13.into_push_pull_output(&mut gpiod.moder, &mut gpiod.otyper);
-    let sclk = gpiof.pf7.into_af5(&mut gpiof.moder, &mut gpiof.afrl);
-    let miso = gpiof.pf8.into_af5(&mut gpiof.moder, &mut gpiof.afrl);
-    let mosi = gpiof.pf9.into_af5(&mut gpiof.moder, &mut gpiof.afrh);
-
-    let mut led1 = gpiog.pg13.into_push_pull_output(&mut gpiog.moder, &mut gpiog.otyper);
-    let mut led2 = gpiog.pg14.into_push_pull_output(&mut gpiog.moder, &mut gpiog.otyper);
     led1.set_low();
     led2.set_high();
     cs.set_high();
-    rst.set_low();
-    time.delay_ms(10u16);
-    rst.set_high();
-    time.delay_ms(120u16);
-
-    let mut display_spi = hal::spi::Spi::spi5(p.SPI5, (sclk, miso, mosi),
-                                              hal_base::spi::Mode {
-                                                  polarity: hal_base::spi::Polarity::IdleLow,
-                                                  phase: hal_base::spi::Phase::CaptureOnFirstTransition
-                                              },
-                                              MegaHertz(1), clocks, &mut rcc.apb2);
 
     macro_rules! scmd {
         ($cmd:expr) => {
@@ -311,64 +240,84 @@ unsafe {
     }
 
     scmd!(ILI9341_RESET); // RESET
-    time.delay_ms(120u16);
+    time.delay_ms(5u16);
 
-    scmd!(0xCA, 0xC3, 0x08, 0x50);
-    scmd!(ILI9341_POWERB, 0x00, 0xC1, 0x30);
-    scmd!(ILI9341_POWER_SEQ, 0x64, 0x03, 0x12, 0x81);
-    scmd!(ILI9341_DTCA, 0x85, 0x00, 0x78);
-    scmd!(ILI9341_POWERA, 0x39, 0x2C, 0x00, 0x34, 0x02);
-    scmd!(ILI9341_PRC, 0x20);
-    scmd!(ILI9341_DTCB, 0x00, 0x00);
-    scmd!(ILI9341_FRC, 0x00, 0x1B);
-    scmd!(ILI9341_DFC, 0x0A, 0xA2);
-    scmd!(ILI9341_POWER1, 0x10);
-    scmd!(ILI9341_POWER2, 0x10);
-    scmd!(ILI9341_VCOM1, 0x45, 0x15);
-    scmd!(ILI9341_VCOM2, 0x90);
-    scmd!(ILI9341_MAC, 0xC8);
-    scmd!(ILI9341_3GAMMA_EN, 0x00);
+    // scmd!(0xCA, 0xC3, 0x08, 0x50);
+    // scmd!(ILI9341_POWERB, 0x00, 0xC1, 0x30);
+    // scmd!(ILI9341_POWER_SEQ, 0x64, 0x03, 0x12, 0x81);
+    // scmd!(ILI9341_DTCA, 0x85, 0x00, 0x78);
+    // scmd!(ILI9341_POWERA, 0x39, 0x2C, 0x00, 0x34, 0x02);
+    // scmd!(ILI9341_PRC, 0x20);
+    // scmd!(ILI9341_DTCB, 0x00, 0x00);
+    // scmd!(ILI9341_FRC, 0x00, 0x1B);
+    // scmd!(ILI9341_DFC, 0x0A, 0xA2);
+    // scmd!(ILI9341_POWER1, 0x10);
+    // scmd!(ILI9341_POWER2, 0x10);
+    // scmd!(ILI9341_VCOM1, 0x45, 0x15);
+    // scmd!(ILI9341_VCOM2, 0x90);
+    // scmd!(ILI9341_MAC, 0xC8);
+    // scmd!(ILI9341_3GAMMA_EN, 0x00);
     scmd!(ILI9341_RGB_INTERFACE, 0xC2);
-    scmd!(ILI9341_DFC, 0x0A, 0xA7, 0x27, 0x04);
+    // scmd!(ILI9341_DFC, 0x0A, 0xA7, 0x27, 0x04);
 
-    scmd!(ILI9341_COLUMN_ADDR, 0x00, 0x00, 0x00, 0xEF);
-    scmd!(ILI9341_PAGE_ADDR, 0x00, 0x00, 0x01, 0x3F);
+    // scmd!(ILI9341_COLUMN_ADDR, 0x00, 0x00, 0x00, 0xEF);
+    // scmd!(ILI9341_PAGE_ADDR, 0x00, 0x00, 0x01, 0x3F);
     scmd!(ILI9341_INTERFACE, 0x01, 0x00, 0x06);
-    scmd!(ILI9341_GRAM);
-    time.delay_ms(120u16);
-    scmd!(ILI9341_GAMMA, 0x01);
-    scmd!(ILI9341_PGAMMA, 0x0F, 0x29, 0x24, 0x0C, 0x0E, 0x09, 0x4E, 0x78, 0x3C, 0x09, 0x13, 0x05, 0x17, 0x11, 0x00);
-    scmd!(ILI9341_NGAMMA, 0x00, 0x16, 0x1B, 0x04, 0x11, 0x07, 0x31, 0x33, 0x42, 0x05, 0x0C, 0x0A, 0x28, 0x2F, 0x0F);
+    // scmd!(ILI9341_GRAM);
+    // scmd!(ILI9341_GAMMA, 0x01);
+    // scmd!(ILI9341_PGAMMA, 0x0F, 0x29, 0x24, 0x0C, 0x0E, 0x09, 0x4E, 0x78, 0x3C, 0x09, 0x13, 0x05, 0x17, 0x11, 0x00);
+    // scmd!(ILI9341_NGAMMA, 0x00, 0x16, 0x1B, 0x04, 0x11, 0x07, 0x31, 0x33, 0x42, 0x05, 0x0C, 0x0A, 0x28, 0x2F, 0x0F);
     scmd!(ILI9341_SLEEP_OUT);
-    time.delay_ms(120u16);
+    time.delay_ms(60u16);
+    // time.delay_ms(60u16);
     scmd!(ILI9341_DISPLAY_ON);
-    scmd!(ILI9341_GRAM);
+    // scmd!(ILI9341_GRAM);
 
     // Dither on, display on
     p.LTDC.gcr.modify(|_, w| w.den().bit(true).ltdcen().bit(true));
 
-    // Reload config again
+    // Reload config to show display
     p.LTDC.srcr.write(|w| w.imr().bit(true));
 
-    // writeln!(stdout, "write something ...").unwrap();
-    for i in 0..320 {
-        for j in 0..240 {
+    for x in 0..20 {
+        for y in 20..40 {
             unsafe {
-                FRAMEBUF[i*240+j] = (i*j) as u16;
+                FRAMEBUF[x*240+y] = 0b11111_000000_00000;
+            }
+        }
+    }
+    for x in 20..40 {
+        for y in 40..60 {
+            unsafe {
+                FRAMEBUF[x*240+y] = 0b00000_111111_00000;
+            }
+        }
+    }
+    for x in 40..60 {
+        for y in 60..80 {
+            unsafe {
+                FRAMEBUF[x*240+y] = 0b00000_000000_11111;
             }
         }
     }
 
     led1.set_high();
     led2.set_low();
-    panic!("end");
+    let mut ctr: usize = 0;
     loop {
+        ctr += 1;
         led1.set_high();
         led2.set_low();
-        time.delay_ms(500u16);
+        time.delay_ms(5u16);
         led2.set_high();
         led1.set_low();
-        time.delay_ms(500u16);
+        time.delay_ms(5u16);
+        for y in 100..240 {
+        unsafe {
+            FRAMEBUF[(ctr % 320)*240 + y] = 0b00000_000000_00000;
+            FRAMEBUF[((ctr+1) % 320)*240 + y] = ((((ctr+1) / 10) % 32) << 11) as u16;
+        }
+        }
     }
 }
 
