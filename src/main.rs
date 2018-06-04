@@ -26,6 +26,7 @@ use hal::delay::Delay;
 use hal::rcc::RccExt;
 use hal::gpio::GpioExt;
 use hal::flash::FlashExt;
+use hal_base::spi;
 use hal_base::prelude::*;
 
 mod font;
@@ -67,14 +68,17 @@ const ILI9341_PRC: u8 = 0xF7;
 static mut FRAMEBUF: [u16; 240*320] = [0; 240*320];
 
 fn main() -> ! {
-    let mut stdout = hio::hstdout().unwrap();
+    // let mut stdout = hio::hstdout().unwrap();
     let pa = arm::Peripherals::take().unwrap();
     let p = stm::Peripherals::take().unwrap();
-    writeln!(stdout, "start...").unwrap();
+    // writeln!(stdout, "start...").unwrap();
 
     // configure clock
     let mut rcc = p.RCC.constrain();
-    rcc.cfgr = rcc.cfgr.hclk(MegaHertz(176)).sysclk(MegaHertz(176)).pclk1(MegaHertz(44)).pclk2(MegaHertz(88));
+    rcc.cfgr = rcc.cfgr.hclk(MegaHertz(176))
+                       .sysclk(MegaHertz(176))
+                       .pclk1(MegaHertz(44))
+                       .pclk2(MegaHertz(88));
     let mut flash = p.FLASH.constrain();
     let clocks = rcc.cfgr.freeze(&mut flash.acr);
     let mut time = Delay::new(pa.SYST, clocks);
@@ -97,15 +101,16 @@ fn main() -> ! {
     let miso = gpiof.pf8.into_af5(&mut gpiof.moder, &mut gpiof.afrl);
     let mosi = gpiof.pf9.into_af5(&mut gpiof.moder, &mut gpiof.afrh);
     let mut display_spi = hal::spi::Spi::spi5(p.SPI5, (sclk, miso, mosi),
-        hal_base::spi::Mode { polarity: hal_base::spi::Polarity::IdleLow,
-                              phase: hal_base::spi::Phase::CaptureOnFirstTransition },
+        spi::Mode { polarity: spi::Polarity::IdleLow, phase: spi::Phase::CaptureOnFirstTransition },
         MegaHertz(1), clocks, &mut rcc.apb2);
 
-    // Console UART
-    let utx = gpioa.pa9 .into_af7(&mut gpioa.moder, &mut gpioa.afrh);
-    let urx = gpioa.pa10.into_af7(&mut gpioa.moder, &mut gpioa.afrh);
-    let mut console_uart = hal::serial::Serial::usart1(p.USART1, (utx, urx),
-        hal::time::Bps(17280), clocks, &mut rcc.apb2);
+    // Console UART (UART #3)
+    let utx = gpiod.pd8 .into_af7(&mut gpiod.moder, &mut gpiod.afrh);
+    let urx = gpiod.pd9 .into_af7(&mut gpiod.moder, &mut gpiod.afrh);
+    let rts = gpiod.pd12.into_af7(&mut gpiod.moder, &mut gpiod.afrh);
+    let mut console_uart = hal::serial::Serial::usart3(p.USART3, (utx, urx),
+        hal::time::Bps(900000), clocks, &mut rcc.apb1);
+    console_uart.set_rts(rts);
     let (mut console_tx, mut console_rx) = console_uart.split();
 
     // LCD pins
@@ -389,6 +394,9 @@ fn main() -> ! {
             _    => {}
         }
     }
+
+    draw(COLS-3, 1, b'O', G2, B2);
+    draw(COLS-2, 1, b'K', G2, B2);
 
     draw(cx, cy, CURSOR, color, bkgrd);
     loop {
