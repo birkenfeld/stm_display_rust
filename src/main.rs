@@ -15,7 +15,6 @@ extern crate stm32f429 as stm;
 extern crate stm32f429_hal as hal;
 use stm::RCC;
 
-use core::ptr;
 use core::fmt::Write;
 
 use rt::ExceptionFrame;
@@ -65,7 +64,7 @@ const ILI9341_3GAMMA_EN: u8 = 0xF2;
 const ILI9341_INTERFACE: u8 = 0xF6;
 const ILI9341_PRC: u8 = 0xF7;
 
-static mut FRAMEBUF: [u16; 240*320] = [0; 240*320];
+static mut FRAMEBUF: [u16; 250*320] = [0; 250*320];
 
 fn main() -> ! {
     // let mut stdout = hio::hstdout().unwrap();
@@ -141,7 +140,7 @@ fn main() -> ! {
     let rcc_raw = unsafe { &*RCC::ptr() };
     rcc_raw.apb2enr.modify(|_, w| w.ltdcen().bit(true));
     // enable DMA2D clock
-    // rcc_raw.ahb1enr.modify(|_, w| w.dma2den().bit(true));
+    rcc_raw.ahb1enr.modify(|_, w| w.dma2den().bit(true));
     // enable PLLSAI
     	/* Configure PLLSAI prescalers for LCD */
 	/* Enable Pixel Clock */
@@ -190,7 +189,7 @@ fn main() -> ! {
     // Color frame buffer start address
     p.LTDC.l1cfbar.write(|w| unsafe { w.cfbadd().bits(FRAMEBUF.as_ptr() as u32) }); // XXX
     // Color frame buffer line length (active*bpp + 3), and pitch
-    p.LTDC.l1cfblr.write(|w| unsafe { w.cfbll().bits(240*2 + 3).cfbp().bits(240*2) });
+    p.LTDC.l1cfblr.write(|w| unsafe { w.cfbll().bits(240*2 + 3).cfbp().bits(250*2) });
     // Frame buffer number of lines
     p.LTDC.l1cfblnr.write(|w| unsafe { w.cfblnbr().bits(320) });
 
@@ -270,7 +269,7 @@ fn main() -> ! {
     // scmd!(ILI9341_POWER2, 0x10);
     // scmd!(ILI9341_VCOM1, 0x45, 0x15);
     // scmd!(ILI9341_VCOM2, 0x90);
-    // scmd!(ILI9341_MAC, 0xC8);
+    scmd!(ILI9341_MAC, 0xC0);
     // scmd!(ILI9341_3GAMMA_EN, 0x00);
     scmd!(ILI9341_RGB_INTERFACE, 0xC2);
     // scmd!(ILI9341_DFC, 0x0A, 0xA7, 0x27, 0x04);
@@ -294,6 +293,17 @@ fn main() -> ! {
     // Reload config to show display
     p.LTDC.srcr.write(|w| w.imr().bit(true));
 
+    // Basic ChromArt configuration
+    p.DMA2D.fgpfccr.write(|w| unsafe { w.cm().bits(0b0010) }); // RGB565
+    p.DMA2D.opfccr.write(|w| unsafe { w.cm().bits(0b0010) });
+
+    // for scrolling up one line
+    p.DMA2D.fgmar.write(|w| unsafe { w.bits(FRAMEBUF.as_ptr().offset(CHARH as isize) as u32) });
+    p.DMA2D.fgor.write(|w| unsafe { w.bits(CHARH as u32) });
+    p.DMA2D.omar.write(|w| unsafe { w.bits(FRAMEBUF.as_ptr() as u32) });
+    p.DMA2D.oor.write(|w| unsafe { w.bits(CHARH as u32) });
+    p.DMA2D.nlr.write(|w| unsafe { w.pl().bits(HEIGHT as u16).nl().bits(WIDTH as u16) });
+
     led1.set_high();
     led2.set_low();
 
@@ -310,6 +320,7 @@ fn main() -> ! {
     ];
     const WIDTH: usize = 320;
     const HEIGHT: usize = 240;
+    const PITCH: usize = 250;
     const COLS: u16 = 53;
     const ROWS: u16 = 24;
     const CHARH: u16 = 10;
@@ -328,25 +339,10 @@ fn main() -> ! {
     fn draw(cx: u16, cy: u16, ch: u8, color: u16, bkgrd: u16) {
         FONT[ch as usize].iter().zip(cy*CHARH..(cy+1)*CHARH).for_each(|(charrow, y)| {
             (0..CHARW).for_each(|x| unsafe {
-                FRAMEBUF[(x + cx*CHARW) as usize * HEIGHT + y as usize] =
+                FRAMEBUF[(x + cx*CHARW) as usize * PITCH + y as usize] =
                     if charrow & (1 << (CHARW - 1 - x)) != 0 { color } else { bkgrd };
             });
         });
-    }
-
-    fn scroll(by: u16, bkgrd: u16) {
-        let by = by as usize;
-        for x in 0..WIDTH {
-            let start = x * HEIGHT;
-            unsafe {
-                ptr::copy(FRAMEBUF.as_ptr().offset((start + by) as isize),
-                          FRAMEBUF.as_mut_ptr().offset(start as isize),
-                          HEIGHT - by);
-                for y in 1..by+1 {
-                    FRAMEBUF[(x+1)*HEIGHT - y] = bkgrd;
-                }
-            }
-        }
     }
 
     fn process_escape(end: u8, seq: &[u8], cx: &mut u16, cy: &mut u16, color: &mut u16, bkgrd: &mut u16) {
@@ -431,8 +427,9 @@ fn main() -> ! {
                 cx = 0;
                 cy += 1;
                 if cy == ROWS {
-                    // scroll one row
-                    scroll(CHARH, bkgrd);
+                    // scroll one row using DMA
+                    p.DMA2D.cr.modify(|_, w| unsafe { w.mode().bits(0).start().set_bit() });
+                    while p.DMA2D.cr.read().start().bit_is_set() {}
                     cy -= 1;
                 }
                 draw(cx, cy, CURSOR, color, bkgrd);
