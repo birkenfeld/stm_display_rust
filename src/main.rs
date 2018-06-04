@@ -1,6 +1,6 @@
 #![no_main]
 #![no_std]
-//#![allow(unused)]
+#![allow(unused)]
 
 #[macro_use]
 extern crate cortex_m_rt as rt;
@@ -14,6 +14,7 @@ extern crate stm32f429 as stm;
 extern crate stm32f429_hal as hal;
 use stm::RCC;
 
+use core::ptr;
 use core::fmt::Write;
 
 use rt::ExceptionFrame;
@@ -24,6 +25,9 @@ use hal::rcc::RccExt;
 use hal::gpio::GpioExt;
 use hal::flash::FlashExt;
 use hal_base::prelude::*;
+
+mod font;
+use font::FONT;
 
 entry!(main);
 
@@ -92,11 +96,16 @@ fn main() -> ! {
     let miso = gpiof.pf8.into_af5(&mut gpiof.moder, &mut gpiof.afrl);
     let mosi = gpiof.pf9.into_af5(&mut gpiof.moder, &mut gpiof.afrh);
     let mut display_spi = hal::spi::Spi::spi5(p.SPI5, (sclk, miso, mosi),
-                                              hal_base::spi::Mode {
-                                                  polarity: hal_base::spi::Polarity::IdleLow,
-                                                  phase: hal_base::spi::Phase::CaptureOnFirstTransition
-                                              },
-                                              MegaHertz(1), clocks, &mut rcc.apb2);
+        hal_base::spi::Mode { polarity: hal_base::spi::Polarity::IdleLow,
+                              phase: hal_base::spi::Phase::CaptureOnFirstTransition },
+        MegaHertz(1), clocks, &mut rcc.apb2);
+
+    // Console UART
+    let utx = gpioa.pa9 .into_af7(&mut gpioa.moder, &mut gpioa.afrh);
+    let urx = gpioa.pa10.into_af7(&mut gpioa.moder, &mut gpioa.afrh);
+    let mut console_uart = hal::serial::Serial::usart1(p.USART1, (utx, urx),
+        hal::time::Bps(69120), clocks, &mut rcc.apb2);
+    let (mut console_tx, mut console_rx) = console_uart.split();
 
     // LCD pins
     gpioa.pa3 .into_lcd(&mut gpioa.moder, &mut gpioa.ospeedr, &mut gpioa.afrl, 0xE);
@@ -279,44 +288,85 @@ fn main() -> ! {
     // Reload config to show display
     p.LTDC.srcr.write(|w| w.imr().bit(true));
 
-    for x in 0..20 {
-        for y in 20..40 {
-            unsafe {
-                FRAMEBUF[x*240+y] = 0b11111_000000_00000;
-            }
-        }
+    led1.set_high();
+    led2.set_low();
+
+    const B1: u16 = 0b01111  << 11;
+    const G1: u16 = 0b011111 << 5;
+    const R1: u16 = 0b01111;
+    const B2: u16 = 0b11111  << 11;
+    const G2: u16 = 0b111111 << 5;
+    const R2: u16 = 0b11111;
+    // Black Red Green Cyan Blue Magenta Yellow White
+    const LUT: [u16; 16] = [
+        0, R1, G1, R1|G1, B1, R1|B1, G1|B1, R1|G1|B1,
+        0, R2, G2, R2|G2, B2, R2|B2, G2|B2, R2|G2|B2,
+    ];
+    const WIDTH: usize = 320;
+    const HEIGHT: usize = 240;
+    const COLS: u16 = 53;
+    const ROWS: u16 = 24;
+    const CHARH: u16 = 10;
+    const CHARW: u16 = 6;
+    const CURSOR: u8 = b'\n';
+    let mut cx = 0;
+    let mut cy = 0;
+    let mut color = R1|G1|B1;
+    let mut bgcolor = 0;
+
+    fn draw(cx: u16, cy: u16, ch: u8, color: u16, bgcolor: u16) {
+        FONT[ch as usize].iter().zip(cy*CHARH..(cy+1)*CHARH).for_each(|(charrow, y)| {
+            (0..CHARW).for_each(|x| unsafe {
+                FRAMEBUF[(x + cx*CHARW) as usize * HEIGHT + y as usize] =
+                    if charrow & (1 << (CHARW - 1 - x)) != 0 { color } else { bgcolor };
+            });
+        });
     }
-    for x in 20..40 {
-        for y in 40..60 {
+
+    fn scroll(by: u16, bgcolor: u16) {
+        let by = by as usize;
+        for x in 0..WIDTH {
+            let start = x * HEIGHT;
             unsafe {
-                FRAMEBUF[x*240+y] = 0b00000_111111_00000;
-            }
-        }
-    }
-    for x in 40..60 {
-        for y in 60..80 {
-            unsafe {
-                FRAMEBUF[x*240+y] = 0b00000_000000_11111;
+                ptr::copy(FRAMEBUF.as_ptr().offset((start + by) as isize),
+                          FRAMEBUF.as_mut_ptr().offset(start as isize),
+                          HEIGHT - by);
+                for y in 1..by+1 {
+                    FRAMEBUF[(x+1)*HEIGHT - y] = bgcolor;
+                }
             }
         }
     }
 
-    led1.set_high();
-    led2.set_low();
-    let mut ctr: usize = 0;
+    draw(cx, cy, CURSOR, color, bgcolor);
     loop {
-        ctr += 1;
-        led1.set_high();
-        led2.set_low();
-        time.delay_ms(5u16);
-        led2.set_high();
-        led1.set_low();
-        time.delay_ms(5u16);
-        for y in 100..240 {
-        unsafe {
-            FRAMEBUF[(ctr % 320)*240 + y] = 0b00000_000000_00000;
-            FRAMEBUF[((ctr+1) % 320)*240 + y] = ((((ctr+1) / 10) % 32) << 11) as u16;
-        }
+        while let Ok(ch) = console_rx.read() {
+            block!(console_tx.write(ch)).unwrap();
+
+            if ch == b'\r' {
+                // do nothing
+            } else if ch == b'\n' {
+                draw(cx, cy, b' ', color, bgcolor); // erase cursor
+                cx = 0;
+                cy += 1;
+                if cy == ROWS {
+                    // scroll one row
+                    scroll(CHARH, bgcolor);
+                    cy -= 1;
+                }
+                draw(cx, cy, CURSOR, color, bgcolor);
+            } else if ch == b'\x08' {
+                if cx > 0 {
+                    draw(cx, cy, b' ', color, bgcolor); // erase cursor
+                    cx -= 1;
+                    draw(cx, cy, CURSOR, color, bgcolor);
+                }
+            } else {
+                draw(cx, cy, ch, color, bgcolor);
+                cx = (cx + 1) % COLS;
+                draw(cx, cy, CURSOR, color, bgcolor);
+            }
+            if cx % 2 == 0 { led2.set_low(); } else { led2.set_high(); }
         }
     }
 }
