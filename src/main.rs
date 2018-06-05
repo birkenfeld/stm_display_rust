@@ -9,18 +9,21 @@ extern crate panic_semihosting;
 #[macro_use]
 extern crate nb;
 extern crate btoi;
+extern crate arraydeque;
 extern crate embedded_hal as hal_base;
 extern crate cortex_m as arm;
 #[macro_use]
 extern crate stm32f429 as stm;
 extern crate stm32f429_hal as hal;
-use stm::{LTDC, RCC, TIM3};
+use stm::{LTDC, RCC, TIM3, USART3};
 
+use core::ptr;
 use core::fmt::Write;
 
 use rt::ExceptionFrame;
 use sh::hio;
 use btoi::btoi;
+use arraydeque::ArrayDeque;
 use hal::time::*;
 use hal::delay::Delay;
 use hal::rcc::RccExt;
@@ -65,27 +68,65 @@ const ILI9341_3GAMMA_EN: u8 = 0xF2;
 const ILI9341_INTERFACE: u8 = 0xF6;
 const ILI9341_PRC: u8 = 0xF7;
 
+const B1: u16 = 0b01111  << 11;
+const G1: u16 = 0b011111 << 5;
+const R1: u16 = 0b01111;
+const B2: u16 = 0b11111  << 11;
+const G2: u16 = 0b111111 << 5;
+const R2: u16 = 0b11111;
+// Black Red Green Cyan Blue Magenta Yellow White
+const LUT: [u16; 16] = [
+    0, R1, G1, R1|G1, B1, R1|B1, G1|B1, R1|G1|B1,
+    0, R2, G2, R2|G2, B2, R2|B2, G2|B2, R2|G2|B2,
+];
+const WIDTH: usize = 320;
+const HEIGHT: usize = 240;
+const PITCH: usize = 250;
+const COLS: u16 = 53;
+const ROWS: u16 = 24;
+const CHARH: u16 = 10;
+const CHARW: u16 = 6;
+const CURSOR: u8 = b'\n';
+const DEFAULT_COLOR: u16 = R1|G1|B1;
+const DEFAULT_BKGRD: u16 = 0;
+
 // main framebuffer
 static mut FRAMEBUF: [u16; 250*320] = [0; 250*320];
+// cursor framebuffer, just the cursor itself
+static mut CURSORBUF: [u16; 6] = [R1|G1|B1; 6];
+
+// TX receive buffer
+static mut RXBUF: Option<ArrayDeque<[u8; 256]>> = None;
+
 
 fn main() -> ! {
-    // let mut stdout = hio::hstdout().unwrap();
-    let mut pa = arm::Peripherals::take().unwrap();
+    let mut stdout = hio::hstdout().unwrap();
+    let pcore = arm::Peripherals::take().unwrap();
     let p = stm::Peripherals::take().unwrap();
     // writeln!(stdout, "start...").unwrap();
-    // cursor framebuffer, just the cursor itself
-    static mut CURSORBUF: [u16; 6] = [R1|G1|B1; 6];
+
+    unsafe {
+        RXBUF = Some(ArrayDeque::new());
+    }
 
     // configure clock
     let mut rcc = p.RCC.constrain();
-    rcc.cfgr = rcc.cfgr.hclk(MegaHertz(176))
-                       .sysclk(MegaHertz(176))
-                       .pclk1(MegaHertz(44))
-                       .pclk2(MegaHertz(88));
+    rcc.cfgr = rcc.cfgr.sysclk(MegaHertz(168))
+        .hclk(MegaHertz(168))
+        .pclk1(MegaHertz(42))
+        .pclk2(MegaHertz(84));
+    // activate flash caches
+    p.FLASH.acr.write(|w| w.dcen().set_bit().icen().set_bit().prften().set_bit());
     let mut flash = p.FLASH.constrain();
     let clocks = rcc.cfgr.freeze(&mut flash.acr);
-    let mut time = Delay::new(pa.SYST, clocks);
+    let mut time = Delay::new(pcore.SYST, clocks);
 
+    // enable interrupts
+    let mut nvic = pcore.NVIC;
+    nvic.enable(stm::Interrupt::TIM3);
+    nvic.enable(stm::Interrupt::USART3);
+
+    // set up pins
     let mut gpioa = p.GPIOA.split(&mut rcc.ahb1);
     let mut gpiob = p.GPIOB.split(&mut rcc.ahb1);
     let mut gpioc = p.GPIOC.split(&mut rcc.ahb1);
@@ -112,8 +153,9 @@ fn main() -> ! {
     let urx = gpiod.pd9 .into_af7(&mut gpiod.moder, &mut gpiod.afrh);
     let rts = gpiod.pd12.into_af7(&mut gpiod.moder, &mut gpiod.afrh);
     let mut console_uart = hal::serial::Serial::usart3(p.USART3, (utx, urx),
-        hal::time::Bps(900000), clocks, &mut rcc.apb1);
+        hal::time::Bps(19200), clocks, &mut rcc.apb1);
     console_uart.set_rts(rts);
+    console_uart.listen(hal::serial::Event::Rxne);
     let (mut console_tx, mut console_rx) = console_uart.split();
 
     // LCD pins
@@ -298,34 +340,10 @@ fn main() -> ! {
     led1.set_high();
     led2.set_low();
 
-    // enable timer interrupt
-    pa.NVIC.enable(stm::Interrupt::TIM3);
-
     // set up blinking timer
     let mut timer = hal::timer::Timer::tim3(p.TIM3, Hertz(4), clocks, &mut rcc.apb1);
     timer.listen(hal::timer::Event::TimeOut);
 
-    const B1: u16 = 0b01111  << 11;
-    const G1: u16 = 0b011111 << 5;
-    const R1: u16 = 0b01111;
-    const B2: u16 = 0b11111  << 11;
-    const G2: u16 = 0b111111 << 5;
-    const R2: u16 = 0b11111;
-    // Black Red Green Cyan Blue Magenta Yellow White
-    const LUT: [u16; 16] = [
-        0, R1, G1, R1|G1, B1, R1|B1, G1|B1, R1|G1|B1,
-        0, R2, G2, R2|G2, B2, R2|B2, G2|B2, R2|G2|B2,
-    ];
-    const WIDTH: usize = 320;
-    const HEIGHT: usize = 240;
-    const PITCH: usize = 250;
-    const COLS: u16 = 53;
-    const ROWS: u16 = 24;
-    const CHARH: u16 = 10;
-    const CHARW: u16 = 6;
-    const CURSOR: u8 = b'\n';
-    const DEFAULT_COLOR: u16 = R1|G1|B1;
-    const DEFAULT_BKGRD: u16 = 0;
     let mut cx = 0;
     let mut cy = 0;
     let mut color = DEFAULT_COLOR;
@@ -402,8 +420,8 @@ fn main() -> ! {
     draw(COLS-3, 1, b'O', G2, B2);
     draw(COLS-2, 1, b'K', G2, B2);
 
-    loop {
-        while let Ok(ch) = console_rx.read() {
+    loop { unsafe {
+        if let Some(ch) = RXBUF.as_mut().unwrap().pop_front() {
             block!(console_tx.write(ch)).unwrap();
 
             if escape == 1 {
@@ -453,7 +471,7 @@ fn main() -> ! {
             }
             if cx % 2 == 0 { led2.set_low(); } else { led2.set_high(); }
         }
-    }
+    } }
 }
 
 interrupt!(TIM3, blink, state: bool = false);
@@ -470,6 +488,16 @@ fn blink(st: &mut bool) {
     let tim3_raw = unsafe { &*TIM3::ptr() };
     tim3_raw.sr.modify(|_, w| w.uif().clear_bit());
     tim3_raw.cr1.modify(|_, w| w.cen().set_bit());
+}
+
+interrupt!(USART3, receive);
+
+#[inline(always)]
+fn receive() {
+    unsafe {
+        let data = ptr::read_volatile(&(*USART3::ptr()).dr as *const _ as *const _);
+        RXBUF.as_mut().unwrap().push_back(data);
+    }
 }
 
 exception!(HardFault, hard_fault);
