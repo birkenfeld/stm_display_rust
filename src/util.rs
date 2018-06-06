@@ -14,46 +14,31 @@ macro_rules! bitset {
 #[macro_export]
 macro_rules! write {
     ($p:ident . $r:ident : $($tt:tt)+) => {
-        unsafe {
-            use stm::$p;
-            (*$p::ptr()).$r.write(|w| bitset!(w; $($tt)+));
-        }
+        unsafe { (*stm::$p::ptr()).$r.write(|w| bitset!(w; $($tt)+)); }
     };
 }
 
 #[macro_export]
 macro_rules! read {
     ($p:ident . $r:ident : $bit:ident) => {
-        unsafe {
-            use stm::$p;
-            (*$p::ptr()).$r.read().$bit().bits()
-        }
+        unsafe { (*stm::$p::ptr()).$r.read().$bit().bits() }
     };
 }
 
 #[macro_export]
 macro_rules! modif {
     ($p:ident . $r:ident : $($tt:tt)+) => {
-        unsafe {
-            use stm::$p;
-            (*$p::ptr()).$r.modify(|_, w| bitset!(w; $($tt)+));
-        }
+        unsafe { (*stm::$p::ptr()).$r.modify(|_, w| bitset!(w; $($tt)+)); }
     };
 }
 
 #[macro_export]
 macro_rules! wait_for {
     ($p:ident . $r:ident : $bit:ident) => {
-        unsafe {
-            use stm::$p;
-            while (*$p::ptr()).$r.read().$bit().bit_is_clear() {}
-        }
+        unsafe { while (*stm::$p::ptr()).$r.read().$bit().bit_is_clear() {} }
     };
     ($p:ident . $r:ident : ! $bit:ident) => {
-        unsafe {
-            use stm::$p;
-            while (*$p::ptr()).$r.read().$bit().bit_is_set() {}
-        }
+        unsafe { while (*stm::$p::ptr()).$r.read().$bit().bit_is_set() {} }
     };
 }
 
