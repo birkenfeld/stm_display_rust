@@ -41,17 +41,6 @@ const ILI9341_MAC: u8 = 0x36;
 const ILI9341_RGB_INTERFACE: u8 = 0xB0;
 const ILI9341_INTERFACE: u8 = 0xF6;
 
-const B1: u16 = 0b01111  << 11;
-const G1: u16 = 0b011111 << 5;
-const R1: u16 = 0b01111;
-const B2: u16 = 0b11111  << 11;
-const G2: u16 = 0b111111 << 5;
-const R2: u16 = 0b11111;
-// Black Red Green Cyan Blue Magenta Yellow White
-const LUT: [u16; 16] = [
-    0, R1, G1, R1|G1, B1, R1|B1, G1|B1, R1|G1|B1,
-    0, R2, G2, R2|G2, B2, R2|B2, G2|B2, R2|G2|B2,
-];
 const WIDTH: usize = 320;
 const HEIGHT: usize = 240;
 const PITCH: usize = 250;
@@ -59,13 +48,13 @@ const COLS: u16 = 53;
 const ROWS: u16 = 24;
 const CHARH: u16 = 10;
 const CHARW: u16 = 6;
-const DEFAULT_COLOR: u16 = R1|G1|B1;
-const DEFAULT_BKGRD: u16 = 0;
+const DEFAULT_COLOR: u8 = 7;
+const DEFAULT_BKGRD: u8 = 0;
 
 // main framebuffer
-static mut FRAMEBUF: [u16; 250*320] = [0; 250*320];
+static mut FRAMEBUF: [u8; 250*320] = [0; 250*320];
 // cursor framebuffer, just the cursor itself
-static CURSORBUF: [u16; 6] = [R1|G1|B1; 6];
+static CURSORBUF: [u8; 6] = [127; 6];
 
 // TX receive buffer
 static mut RXBUF: Option<ArrayDeque<[u8; 256]>> = None;
@@ -170,8 +159,8 @@ fn main() -> ! {
     wait_for!(RCC.cr: pllsairdy);
 
     // Basic ChromArt configuration
-    write!(DMA2D.fgpfccr: cm = 0b0010);  // RGB565 in, RGB565 out
-    write!(DMA2D.opfccr:  cm = 0b0010);
+    write!(DMA2D.fgpfccr: cm = 0b0101);  // L8 in/out
+    write!(DMA2D.opfccr:  cm = 0b0101);
 
     // for scrolling up one line
     write!(DMA2D.fgmar: ma = FRAMEBUF.as_ptr().offset(CHARH as isize) as u32);
@@ -192,7 +181,7 @@ fn main() -> ! {
     write!(LTDC.l1whpcr: whstpos = 30, whsppos = 269);
     write!(LTDC.l1wvpcr: wvstpos = 4,  wvsppos = 323);
     // Pixel format
-    write!(LTDC.l1pfcr: pf = 0b010);  // RGB-565
+    write!(LTDC.l1pfcr: pf = 0b101);  // 8-bit (CLUT enabled below)
     // Constant alpha value
     write!(LTDC.l1cacr: consta = 0xFF);
     // Default color values
@@ -202,25 +191,46 @@ fn main() -> ! {
     // Color frame buffer start address
     write!(LTDC.l1cfbar: cfbadd = FRAMEBUF.as_ptr() as u32);
     // Color frame buffer line length (active*bpp + 3), and pitch
-    write!(LTDC.l1cfblr: cfbll = 240*2 + 3, cfbp = 250*2);
+    write!(LTDC.l1cfblr: cfbll = 240 + 3, cfbp = 250);
     // Frame buffer number of lines
     write!(LTDC.l1cfblnr: cfblnbr = 320);
+
+    // Set up 256-color ANSI LUT
+    for v in 0..16 {
+        let b = (v & 1 != 0) as u8;
+        let g = (v & 2 != 0) as u8;
+        let r = (v & 4 != 0) as u8;
+        let i = (v & 8 != 0) as u8;
+        write!(LTDC.l1clutwr: clutadd = v,
+               red = 0x55*(r<<1 | i), green = 0x55*(g<<1 | i), blue = 0x55*(b<<1 | i));
+    }
+    for r in 0..6 {
+        for g in 0..6 {
+            for b in 0..6 {
+                write!(LTDC.l1clutwr: clutadd = 16 + 36*r + 6*g + b,
+                       red = 0x33*r, green = 0x33*g, blue = 0x33*b);
+            }
+        }
+    }
+    for i in 0..24 {
+        write!(LTDC.l1clutwr: clutadd = 232+i, red = 11*i, green = 11*i, blue = 11*i);
+    }
 
     // Configure layer 2 (cursor)
 
     // initial position: top left character
     write!(LTDC.l2whpcr: whstpos = 30+9, whsppos = 30+9);
     write!(LTDC.l2wvpcr: wvstpos = 4,  wvsppos = 4+6-1);
-    write!(LTDC.l2pfcr: pf = 0b010);
+    write!(LTDC.l2pfcr: pf = 0b101);  // L-8 without CLUT
     write!(LTDC.l2cacr: consta = 0xFF);
-    write!(LTDC.l2dccr:  dcalpha = 0, dcred = 0, dcgreen = 0, dcblue = 0);
+    write!(LTDC.l2dccr: dcalpha = 0, dcred = 0, dcgreen = 0, dcblue = 0);
     write!(LTDC.l2bfcr: bf1 = 6, bf2 = 7);  // Constant alpha * Pixel alpha
     write!(LTDC.l2cfbar: cfbadd = CURSORBUF.as_ptr() as u32);
-    write!(LTDC.l2cfblr: cfbll = 1*2 + 3, cfbp = 1*2);
+    write!(LTDC.l2cfblr: cfbll = 1 + 3, cfbp = 1);
     write!(LTDC.l2cfblnr: cfblnbr = 6);
 
     // Enable layer1, disable layer2 initially
-    modif!(LTDC.l1cr: len = true);
+    modif!(LTDC.l1cr: cluten = true, len = true);
     modif!(LTDC.l2cr: len = false);
 
     // Reload config again
@@ -252,8 +262,8 @@ fn main() -> ! {
     led1.set_high();
     led2.set_low();
 
-    draw(COLS-3, 1, b'O', G2, B2);
-    draw(COLS-2, 1, b'K', G2, B2);
+    draw(COLS-3, 1, b'O', 0b1010, 0b1100);
+    draw(COLS-2, 1, b'K', 0b1010, 0b1100);
 
     main_loop(console_tx)
 }
@@ -265,7 +275,7 @@ fn cursor(cx: u16, cy: u16) {
     write!(LTDC.srcr: vbr = true);
 }
 
-fn draw(cx: u16, cy: u16, ch: u8, color: u16, bkgrd: u16) {
+fn draw(cx: u16, cy: u16, ch: u8, color: u8, bkgrd: u8) {
     font::FONT[ch as usize].iter().zip(cy*CHARH..(cy+1)*CHARH).for_each(|(charrow, y)| {
         (0..CHARW).for_each(|x| unsafe {
             FRAMEBUF[(x + cx*CHARW) as usize * PITCH + y as usize] =
@@ -274,16 +284,16 @@ fn draw(cx: u16, cy: u16, ch: u8, color: u16, bkgrd: u16) {
     });
 }
 
-fn process_escape(end: u8, seq: &[u8], cx: &mut u16, cy: &mut u16, color: &mut u16, bkgrd: &mut u16) {
+fn process_escape(end: u8, seq: &[u8], cx: &mut u16, cy: &mut u16, color: &mut u8, bkgrd: &mut u8) {
     let mut args = seq.split(|&v| v == b';').map(|n| btoi(n).unwrap_or(0));
     match end {
         b'm' => for arg in args {
             match arg {
                 0  => { *color = DEFAULT_COLOR; *bkgrd = DEFAULT_BKGRD; }
-                1  => { *color |= 0b10000_100000_10000; } // WRONG
-                22 => { *color &= !0b10000_100000_10000; }
-                30...37 => { *color = LUT[arg as usize - 30]; }
-                40...47 => { *bkgrd = LUT[arg as usize - 40]; }
+                1  => { *color |= 0b1000; } // XXX: only for 16colors
+                22 => { *color &= !0b1000; }
+                30...37 => { *color = arg as u8 - 30; }
+                40...47 => { *bkgrd = arg as u8 - 40; }
                 _ => {}
             }
         },
@@ -327,7 +337,7 @@ fn main_loop(mut console_tx: hal::serial::Tx<stm::USART3>) -> ! {
     let mut bkgrd = DEFAULT_BKGRD;
     let mut escape = 0;
     let mut escape_len = 0;
-    let mut escape_seq = [0u8; 12];
+    let mut escape_seq = [0u8; 36];
 
     loop {
         if let Some(ch) = fifo().pop_front() {
