@@ -207,13 +207,13 @@ fn main() -> ! {
     for r in 0..6 {
         for g in 0..6 {
             for b in 0..6 {
-                write!(LTDC.l1clutwr: clutadd = 16 + 36*r + 6*g + b,
+                write!(LTDC.l1clutwr: clutadd = 16 + 36*b + 6*g + r,
                        red = 0x33*r, green = 0x33*g, blue = 0x33*b);
             }
         }
     }
     for i in 0..24 {
-        write!(LTDC.l1clutwr: clutadd = 232+i, red = 11*i, green = 11*i, blue = 11*i);
+        write!(LTDC.l1clutwr: clutadd = 232+i, red = 8+10*i, green = 8+10*i, blue = 8+10*i);
     }
 
     // Configure layer 2 (cursor)
@@ -287,13 +287,15 @@ fn draw(cx: u16, cy: u16, ch: u8, color: u8, bkgrd: u8) {
 fn process_escape(end: u8, seq: &[u8], cx: &mut u16, cy: &mut u16, color: &mut u8, bkgrd: &mut u8) {
     let mut args = seq.split(|&v| v == b';').map(|n| btoi(n).unwrap_or(0));
     match end {
-        b'm' => for arg in args {
+        b'm' => while let Some(arg) = args.next() {
             match arg {
                 0  => { *color = DEFAULT_COLOR; *bkgrd = DEFAULT_BKGRD; }
                 1  => { *color |= 0b1000; } // XXX: only for 16colors
                 22 => { *color &= !0b1000; }
                 30...37 => { *color = arg as u8 - 30; }
                 40...47 => { *bkgrd = arg as u8 - 40; }
+                38 => { *color = args.nth(1).unwrap_or(0) as u8; }
+                48 => { *bkgrd = args.nth(1).unwrap_or(0) as u8; }
                 _ => {}
             }
         },
