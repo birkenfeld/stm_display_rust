@@ -20,11 +20,10 @@ use btoi::btoi;
 use arraydeque::ArrayDeque;
 use hal::time::*;
 use hal::timer::Timer;
-use hal::delay::Delay;
+//use hal::delay::Delay;
 use hal::rcc::RccExt;
 use hal::gpio::GpioExt;
 use hal::flash::FlashExt;
-use hal_base::spi;
 use hal_base::prelude::*;
 
 #[macro_use]
@@ -33,26 +32,18 @@ mod font;
 
 entry!(main);
 
-const ILI9341_RESET: u8 = 0x01;
-const ILI9341_SLEEP_OUT: u8 = 0x11;
-const ILI9341_DISPLAY_ON: u8 = 0x29;
-const ILI9341_MAC: u8 = 0x36;
-// const ILI9341_PIXEL_FORMAT: u8 = 0x3A;
-const ILI9341_RGB_INTERFACE: u8 = 0xB0;
-const ILI9341_INTERFACE: u8 = 0xF6;
-
-const WIDTH: usize = 320;
-const HEIGHT: usize = 240;
-const PITCH: usize = 250;
-const COLS: u16 = 53;
-const ROWS: u16 = 24;
+const WIDTH: usize = 480;
+const HEIGHT: usize = 128;
+const COLS: u16 = 80;
+const ROWS: u16 = 12;
 const CHARH: u16 = 10;
 const CHARW: u16 = 6;
 const DEFAULT_COLOR: u8 = 7;
 const DEFAULT_BKGRD: u8 = 0;
+const FULLH: usize = HEIGHT+CHARH as usize;
 
 // main framebuffer
-static mut FRAMEBUF: [u8; 250*320] = [0; 250*320];
+static mut FRAMEBUF: [u8; WIDTH*FULLH] = [0; WIDTH*FULLH];
 // cursor framebuffer, just the cursor itself
 static CURSORBUF: [u8; 6] = [127; 6];
 
@@ -79,19 +70,18 @@ fn main() -> ! {
     write!(FLASH.acr: dcen = true, icen = true, prften = true);
     let mut flash = peri.FLASH.constrain();
     let clocks = rcc.cfgr.freeze(&mut flash.acr);
-    let mut time = Delay::new(pcore.SYST, clocks);
+//    let mut time = Delay::new(pcore.SYST, clocks);
 
     // set up pins
     let mut gpioa = peri.GPIOA.split(&mut rcc.ahb1);
     let mut gpiob = peri.GPIOB.split(&mut rcc.ahb1);
     let mut gpioc = peri.GPIOC.split(&mut rcc.ahb1);
     let mut gpiod = peri.GPIOD.split(&mut rcc.ahb1);
-    let mut gpiof = peri.GPIOF.split(&mut rcc.ahb1);
-    let mut gpiog = peri.GPIOG.split(&mut rcc.ahb1);
+    let mut gpioe = peri.GPIOE.split(&mut rcc.ahb1);
 
     // LEDs
-    let mut led1 = gpiog.pg13.into_push_pull_output(&mut gpiog.moder, &mut gpiog.otyper);
-    let mut led2 = gpiog.pg14.into_push_pull_output(&mut gpiog.moder, &mut gpiog.otyper);
+    let mut led1 = gpiob.pb7.into_push_pull_output(&mut gpiob.moder, &mut gpiob.otyper);
+    let mut led2 = gpiob.pb14.into_push_pull_output(&mut gpiob.moder, &mut gpiob.otyper);
 
     led1.set_low();
     led2.set_high();
@@ -99,16 +89,6 @@ fn main() -> ! {
     // set up blinking timer
     let mut timer = Timer::tim3(peri.TIM3, Hertz(4), clocks, &mut rcc.apb1);
     timer.listen(hal::timer::Event::TimeOut);
-
-    // LCD SPI
-    let mut cs = gpioc.pc2.into_push_pull_output(&mut gpioc.moder, &mut gpioc.otyper);
-    let mut ds = gpiod.pd13.into_push_pull_output(&mut gpiod.moder, &mut gpiod.otyper);
-    let sclk = gpiof.pf7.into_af5(&mut gpiof.moder, &mut gpiof.afrl);
-    let miso = gpiof.pf8.into_af5(&mut gpiof.moder, &mut gpiof.afrl);
-    let mosi = gpiof.pf9.into_af5(&mut gpiof.moder, &mut gpiof.afrh);
-    let mut display_spi = hal::spi::Spi::spi5(peri.SPI5, (sclk, miso, mosi),
-        spi::Mode { polarity: spi::Polarity::IdleLow, phase: spi::Phase::CaptureOnFirstTransition },
-        MegaHertz(1), clocks, &mut rcc.apb2);
 
     // Console UART (UART #3)
     let utx = gpiod.pd8 .into_af7(&mut gpiod.moder, &mut gpiod.afrh);
@@ -137,23 +117,28 @@ fn main() -> ! {
     gpioc.pc10.into_lcd(&mut gpioc.moder, &mut gpioc.ospeedr, &mut gpioc.afrh, 0xE);
     gpiod.pd3 .into_lcd(&mut gpiod.moder, &mut gpiod.ospeedr, &mut gpiod.afrl, 0xE);
     gpiod.pd6 .into_lcd(&mut gpiod.moder, &mut gpiod.ospeedr, &mut gpiod.afrl, 0xE);
-    gpiof.pf10.into_lcd(&mut gpiof.moder, &mut gpiof.ospeedr, &mut gpiof.afrh, 0xE);
-    gpiog.pg6 .into_lcd(&mut gpiog.moder, &mut gpiog.ospeedr, &mut gpiog.afrl, 0xE);
-    gpiog.pg7 .into_lcd(&mut gpiog.moder, &mut gpiog.ospeedr, &mut gpiog.afrl, 0xE);
-    gpiog.pg10.into_lcd(&mut gpiog.moder, &mut gpiog.ospeedr, &mut gpiog.afrh, 0x9);
-    gpiog.pg11.into_lcd(&mut gpiog.moder, &mut gpiog.ospeedr, &mut gpiog.afrh, 0xE);
-    gpiog.pg12.into_lcd(&mut gpiog.moder, &mut gpiog.ospeedr, &mut gpiog.afrh, 0x9);
+    gpiod.pd10.into_lcd(&mut gpiod.moder, &mut gpiod.ospeedr, &mut gpiod.afrh, 0xE);
+    gpioe.pe11.into_lcd(&mut gpioe.moder, &mut gpioe.ospeedr, &mut gpioe.afrh, 0xE);
+    gpioe.pe12.into_lcd(&mut gpioe.moder, &mut gpioe.ospeedr, &mut gpioe.afrh, 0xE);
+    gpioe.pe13.into_lcd(&mut gpioe.moder, &mut gpioe.ospeedr, &mut gpioe.afrh, 0xE);
+    gpioe.pe14.into_lcd(&mut gpioe.moder, &mut gpioe.ospeedr, &mut gpioe.afrh, 0xE);
+    gpioe.pe15.into_lcd(&mut gpioe.moder, &mut gpioe.ospeedr, &mut gpioe.afrh, 0xE);
+
+    // LCD_enable
+    let mut disp_on = gpioa.pa8.into_push_pull_output(&mut gpioa.moder, &mut gpioa.otyper);
+    disp_on.set_low();
+
 
     // enable clocks
     modif!(RCC.apb2enr: ltdcen = true);
     modif!(RCC.ahb1enr: dma2den = true);
     // enable PLLSAI
     // PLLSAI_VCO Input = HSE_VALUE/PLL_M = 1 Mhz
-    // PLLSAI_VCO Output = PLLSAI_VCO Input * PLLSAI_N = 192 Mhz
-    // PLLLCDCLK = PLLSAI_VCO Output/PLLSAI_R = 192/4 = 96 Mhz
-    // LTDC clock frequency = PLLLCDCLK / RCC_PLLSAIDivR = 96/4 = 24 Mhz
-    write!(RCC.pllsaicfgr: pllsain = 192, pllsaiq = 7, pllsair = 4);
-    write!(RCC.dckcfgr: pllsaidivr = 0b01);  // divide by 4
+    // PLLSAI_VCO Output = PLLSAI_VCO Input * PLLSAI_N = 216 Mhz (f=100..432 MHz)
+    // PLLLCDCLK = PLLSAI_VCO Output/PLLSAI_R = 216/3 = 72 Mhz  (r=2..7)
+    // LTDC clock frequency = PLLLCDCLK / RCC_PLLSAIDivR = 72/8 = 9 Mhz (/2 /4 /8 /16)
+    write!(RCC.pllsaicfgr: pllsain = 216, pllsaiq = 7, pllsair = 3);
+    write!(RCC.dckcfgr: pllsaidivr = 0b10);  // divide by 8
     // enable PLLSAI and wait for it
     modif!(RCC.cr: pllsaion = true);
     wait_for!(RCC.cr: pllsairdy);
@@ -163,23 +148,23 @@ fn main() -> ! {
     write!(DMA2D.opfccr:  cm = 0b0101);
 
     // for scrolling up one line
-    write!(DMA2D.fgmar: ma = FRAMEBUF.as_ptr().offset(CHARH as isize) as u32);
-    write!(DMA2D.fgor: lo = CHARH);
+    write!(DMA2D.fgmar: ma = FRAMEBUF.as_ptr().offset(CHARH as isize*WIDTH as isize) as u32);
+    write!(DMA2D.fgor: lo = 0);
     write!(DMA2D.omar: ma = FRAMEBUF.as_ptr() as u32);
-    write!(DMA2D.oor: lo = CHARH);
-    write!(DMA2D.nlr: pl = HEIGHT as u16, nl = WIDTH as u16);
+    write!(DMA2D.oor: lo = 0);
+    write!(DMA2D.nlr: pl = WIDTH as u16, nl = HEIGHT as u16);
 
     // Configure LCD timings
-    write!(LTDC.sscr: hsw = 9, vsh = 1);            // Vsync, Hsync
-    write!(LTDC.bpcr: ahbp = 29, avbp = 3);         // Back porch
-    write!(LTDC.awcr: aaw = 269, aah = 323);        // Active width
-    write!(LTDC.twcr: totalw = 279, totalh = 327);  // Total width
+    write!(LTDC.sscr: hsw = 10, vsh = 2);            // Vsync, Hsync
+    write!(LTDC.bpcr: ahbp = 10+6, avbp = 2+4);         // Back porch
+    write!(LTDC.awcr: aaw = 10+6+480, aah = 2+4+272);        // Active width
+    write!(LTDC.twcr: totalw = 10+6+480+28, totalh = 2+4+272+8);  // Total width
 
     // Configure layer 1 (main framebuffer)
 
     // Horizontal and vertical window (coordinates include porches)
-    write!(LTDC.l1whpcr: whstpos = 30, whsppos = 269);
-    write!(LTDC.l1wvpcr: wvstpos = 4,  wvsppos = 323);
+    write!(LTDC.l1whpcr: whstpos = 10+6+1, whsppos = 10+6+480);
+    write!(LTDC.l1wvpcr: wvstpos = 2+4+1,  wvsppos = 2+4+128);   // DISPLAY_HEIGHT !!!
     // Pixel format
     write!(LTDC.l1pfcr: pf = 0b101);  // 8-bit (CLUT enabled below)
     // Constant alpha value
@@ -191,9 +176,9 @@ fn main() -> ! {
     // Color frame buffer start address
     write!(LTDC.l1cfbar: cfbadd = FRAMEBUF.as_ptr() as u32);
     // Color frame buffer line length (active*bpp + 3), and pitch
-    write!(LTDC.l1cfblr: cfbll = 240 + 3, cfbp = 250);
+    write!(LTDC.l1cfblr: cfbll = 480 + 3, cfbp = 480);
     // Frame buffer number of lines
-    write!(LTDC.l1cfblnr: cfblnbr = 320);
+    write!(LTDC.l1cfblnr: cfblnbr = 128);
 
     // Set up 256-color ANSI LUT
     for v in 0..16 {
@@ -219,8 +204,8 @@ fn main() -> ! {
     // Configure layer 2 (cursor)
 
     // initial position: top left character
-    write!(LTDC.l2whpcr: whstpos = 30+9, whsppos = 30+9);
-    write!(LTDC.l2wvpcr: wvstpos = 4,  wvsppos = 4+6-1);
+    write!(LTDC.l2whpcr: whstpos = 10+6+1, whsppos = 10+6+CHARW);
+    write!(LTDC.l2wvpcr: wvstpos = 2+4+CHARH,  wvsppos = 2+4+CHARH);
     write!(LTDC.l2pfcr: pf = 0b101);  // L-8 without CLUT
     write!(LTDC.l2cacr: consta = 0xFF);
     write!(LTDC.l2dccr: dcalpha = 0, dcred = 0, dcgreen = 0, dcblue = 0);
@@ -242,16 +227,8 @@ fn main() -> ! {
     // Reload config to show display
     write!(LTDC.srcr: imr = true);
 
-    // Initialize LCD controller
-    cs.set_high();
-    spi_cmd!(display_spi, time, cs, ds, ILI9341_RESET);
-    time.delay_ms(5u16);
-    spi_cmd!(display_spi, time, cs, ds, ILI9341_MAC, 0xC0);
-    spi_cmd!(display_spi, time, cs, ds, ILI9341_RGB_INTERFACE, 0xC2);
-    spi_cmd!(display_spi, time, cs, ds, ILI9341_INTERFACE, 0x01, 0x00, 0x06);
-    spi_cmd!(display_spi, time, cs, ds, ILI9341_SLEEP_OUT);
-    time.delay_ms(60u16);
-    spi_cmd!(display_spi, time, cs, ds, ILI9341_DISPLAY_ON);
+    // enable external display
+    disp_on.set_high();
 
     // enable interrupts
     let mut nvic = pcore.NVIC;
@@ -269,8 +246,8 @@ fn main() -> ! {
 }
 
 fn cursor(cx: u16, cy: u16) {
-    write!(LTDC.l2whpcr: whstpos = 30 + 9 + cy*CHARH, whsppos = 30 + 9 + cy*CHARH);
-    write!(LTDC.l2wvpcr: wvstpos = 4 + cx*CHARW, wvsppos = 4 + 6 - 1 + cx*CHARW);
+    write!(LTDC.l2whpcr: whstpos = 10+6+1+cx*CHARW, whsppos =10+6+CHARW+cx*CHARW);
+    write!(LTDC.l2wvpcr: wvstpos = 2+4+(cy+1)*CHARH, wvsppos = 2+4+(cy+1)*CHARH);
     // reload on next vsync
     write!(LTDC.srcr: vbr = true);
 }
@@ -278,7 +255,7 @@ fn cursor(cx: u16, cy: u16) {
 fn draw(cx: u16, cy: u16, ch: u8, color: u8, bkgrd: u8) {
     font::FONT[ch as usize].iter().zip(cy*CHARH..(cy+1)*CHARH).for_each(|(charrow, y)| {
         (0..CHARW).for_each(|x| unsafe {
-            FRAMEBUF[(x + cx*CHARW) as usize * PITCH + y as usize] =
+            FRAMEBUF[(x + cx*CHARW) as usize + y as usize * WIDTH] =
                 if charrow & (1 << (CHARW - 1 - x)) != 0 { color } else { bkgrd };
         });
     });
