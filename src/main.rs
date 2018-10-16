@@ -20,6 +20,7 @@ use btoi::btoi;
 use arraydeque::ArrayDeque;
 use hal::time::*;
 use hal::timer::Timer;
+use hal::delay::Delay;
 use hal::rcc::RccExt;
 use hal::gpio::GpioExt;
 use hal::flash::FlashExt;
@@ -73,6 +74,12 @@ static CURSORBUF: [u8; CHARW as usize] = [CURSOR_COLOR; CHARW as usize];
 // TX receive buffer
 static mut RXBUF: Option<ArrayDeque<[u8; 256]>> = None;
 
+// Publicity
+const MLZLOGO: &[u8] = include_bytes!("logo_mlz.raw");
+const MLZLOGO_SIZE: (u16, u16) = (240, 84);
+
+mod lorem;
+
 fn fifo() -> &'static mut ArrayDeque<[u8; 256]> {
     unsafe { RXBUF.get_or_insert_with(ArrayDeque::new) }
 }
@@ -95,6 +102,7 @@ fn main() -> ! {
     write!(FLASH.acr: dcen = true, icen = true, prften = true);
     let mut flash = peri.FLASH.constrain();
     let clocks = rcc.cfgr.freeze(&mut flash.acr);
+    let mut delay = Delay::new(pcore.SYST, clocks);
 
     // set up pins
     let mut gpioa = peri.GPIOA.split(&mut rcc.ahb1);
@@ -204,7 +212,9 @@ fn main() -> ! {
     // Frame buffer number of lines
     write!(LTDC.l1cfblnr: cfblnbr = HEIGHT);
 
-    // Set up 256-color ANSI LUT
+    // Set up 256-color LUT
+
+    // default ANSI colors
     for v in 0..16 {
         let b = (v & 4 != 0) as u8;
         let g = (v & 2 != 0) as u8;
@@ -213,6 +223,7 @@ fn main() -> ! {
         write!(LTDC.l1clutwr: clutadd = v,
                red = 0x55*(r<<1 | i), green = 0x55*(g<<1 | i), blue = 0x55*(b<<1 | i));
     }
+    // 6x6x6 color cube
     for r in 0..6 {
         for g in 0..6 {
             for b in 0..6 {
@@ -221,6 +232,7 @@ fn main() -> ! {
             }
         }
     }
+    // grayscale
     for i in 0..24 {
         write!(LTDC.l1clutwr: clutadd = 232+i, red = 8+10*i, green = 8+10*i, blue = 8+10*i);
     }
@@ -263,19 +275,52 @@ fn main() -> ! {
     led1.set_high();
     led2.set_low();
 
-    draw(COLS-3, 1, b'O', 0b1010, 0b1100);
-    draw(COLS-2, 1, b'K', 0b1010, 0b1100);
+    for x in 0..WIDTH {
+        for y in 0..HEIGHT {
+            set_pixel(x, y, 255);
+        }
+    }
 
-    unsafe {
-        for &y in &[0, HEIGHT-1] {
-            for x in 0..WIDTH {
-                FRAMEBUF[x as usize + (y * WIDTH) as usize] = 0xff;
+    let off_x = (WIDTH - MLZLOGO_SIZE.0) / 2;
+    let off_y = (HEIGHT - MLZLOGO_SIZE.1) / 2;
+
+    for x in 0..MLZLOGO_SIZE.0 {
+        for y in 0..MLZLOGO_SIZE.1 {
+            let byte = MLZLOGO[(x + y*MLZLOGO_SIZE.0) as usize / 8];
+            if byte & (1 << (x % 8)) != 0 {
+                // MLZ color approximation: #333366 instead of #2d3d72
+                set_pixel(off_x + x, off_y + y, 95);
             }
         }
-        for &x in &[0, WIDTH-1] {
-            for y in 0..HEIGHT {
-                FRAMEBUF[x as usize + (y * WIDTH) as usize] = 0xff;
-            }
+    }
+
+    for _ in 0..1000 {
+        delay.delay_ms(1u32);
+    }
+
+    for x in 0..WIDTH {
+        for y in 0..HEIGHT {
+            set_pixel(x, y, 0);
+        }
+    }
+
+    let mut cx = 0;
+    let mut cy = 0;
+    for line in lorem::TEXT {
+        for &chr in *line {
+            draw_char(cx, cy, chr, DEFAULT_COLOR, DEFAULT_BKGRD);
+            cx = (cx + 1) % COLS;
+        }
+        cx = 0;
+        cy += 1;
+        if cy == ROWS {
+            // scroll one row using DMA
+            modif!(DMA2D.cr: mode = 0, start = true);
+            wait_for!(DMA2D.cr: start);
+            cy -= 1;
+        }
+        for _ in 0..10 {
+            delay.delay_ms(1u32);
         }
     }
 
@@ -291,11 +336,18 @@ fn cursor(cx: u16, cy: u16) {
     write!(LTDC.srcr: vbr = true);
 }
 
-fn draw(cx: u16, cy: u16, ch: u8, color: u8, bkgrd: u8) {
+#[inline(always)]
+fn set_pixel(x: u16, y: u16, color: u8) {
+    unsafe {
+        FRAMEBUF[x as usize + (y * WIDTH) as usize] = color;
+    }
+}
+
+fn draw_char(cx: u16, cy: u16, ch: u8, color: u8, bkgrd: u8) {
     font::FONT[ch as usize].iter().zip(cy*CHARH..(cy+1)*CHARH).for_each(|(charrow, y)| {
-        (0..CHARW).for_each(|x| unsafe {
-            FRAMEBUF[(x + cx*CHARW) as usize + (y * WIDTH) as usize] =
-                if charrow & (1 << (CHARW - 1 - x)) != 0 { color } else { bkgrd };
+        (0..CHARW).for_each(|x| {
+            set_pixel(x + cx*CHARW, y,
+                      if charrow & (1 << (CHARW - 1 - x)) != 0 { color } else { bkgrd });
         });
     });
 }
@@ -341,7 +393,16 @@ fn process_escape(end: u8, seq: &[u8], cx: &mut u16, cy: &mut u16, color: &mut u
             let x = args.next().unwrap_or(1).max(1);
             *cx = x-1;
         }
-        b'J' => {}, // TODO: erase screen
+        b'J' => {
+            // TODO: process arguments
+            for x in 0..WIDTH {
+                for y in 0..HEIGHT {
+                    set_pixel(x, y, 0);
+                }
+            }
+            *cx = 0;
+            *cy = 0;
+        },
         b'K' => {}, // TODO: erase line
         // otherwise, ignore
         _    => {}
@@ -396,13 +457,13 @@ fn main_loop(mut console_tx: hal::serial::Tx<stm::USART3>) -> ! {
             } else if ch == b'\x08' {
                 if cx > 0 {
                     cx -= 1;
-                    draw(cx, cy, b' ', color, bkgrd);
+                    draw_char(cx, cy, b' ', color, bkgrd);
                     cursor(cx, cy);
                 }
             } else if ch == b'\x1b' {
                 escape = 1;
             } else {
-                draw(cx, cy, ch, color, bkgrd);
+                draw_char(cx, cy, ch, color, bkgrd);
                 cx = (cx + 1) % COLS;
                 cursor(cx, cy);
             }
