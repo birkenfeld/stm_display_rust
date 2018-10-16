@@ -84,8 +84,8 @@ fn fifo() -> &'static mut ArrayDeque<[u8; 256]> {
     unsafe { RXBUF.get_or_insert_with(ArrayDeque::new) }
 }
 
-entry!(main);
 
+#[entry]
 fn main() -> ! {
     // let mut stdout = hio::hstdout().unwrap();
     let pcore = arm::Peripherals::take().unwrap();
@@ -490,14 +490,12 @@ fn receive() {
     let _ = fifo().push_back(data);
 }
 
-exception!(HardFault, hard_fault);
-
-fn hard_fault(ef: &ExceptionFrame) -> ! {
+#[exception]
+fn HardFault(ef: &ExceptionFrame) -> ! {
     panic!("HardFault at {:#?}", ef);
 }
 
-exception!(*, default_handler);
-
-fn default_handler(irqn: i16) {
+#[exception]
+fn DefaultHandler(irqn: i16) {
     panic!("Unhandled exception (IRQn = {})", irqn);
 }

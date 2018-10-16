@@ -13,11 +13,11 @@ debug = true
 [dependencies]
 nb = "0.1"
 arraydeque = { version = "0.4", default-features = false }
-btoi = { version = "0.3", default-features = false }
+btoi = { version = "0.4", default-features = false }
 cortex-m = "0.5"
-cortex-m-rt = "0.5"
+cortex-m-rt = "0.6"
 cortex-m-semihosting = "0.3"
-panic-semihosting = "0.2"
+panic-semihosting = "0.5"
 embedded-hal = "0.2"
 stm32f429 = { git = "https://github.com/birkenfeld/stm32f429", features = ["rt"] }
 stm32f429-hal = { git = "https://github.com/birkenfeld/stm32f429-hal", features = ["rt"] }
