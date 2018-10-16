@@ -321,29 +321,45 @@ fn main() -> ! {
         delay.delay_ms(1u32);
     }
 
-    for &(n1, n2, over) in VAL_DISPLAY {
-        clear_screen(0);
+    let mut marq_off = 0;
+    let marq_len = 30;
+    const MARQUEE: &[u8] = b"compressor off, cooling water temperature alarm --- ";
+    for _ in 0..10000 {
+        for &(n1, n2, over) in VAL_DISPLAY {
+            clear_screen(0);
 
-        draw_text(72, 0, b"ccr12.ictrl.frm2", 255, 0);
-        draw_line(0, 15, WIDTH-1, 15, 255);
-        draw_line(240, 0, 240, HEIGHT-1, 33);
+            draw_text(72, 0, b"ccr12.ictrl.frm2", 255, 0);
+            draw_line(0, 15, WIDTH-1, 15, 255);
+            draw_line(240, 15, 240, HEIGHT-15, 33);
+            draw_line(0, 100, WIDTH-1, 100, 255);
 
-        draw_text(1, 5, b"T1", 7, 0);
-        draw_text_large(4, 1, n1, GREENS);
-        draw_char(35, 5, b'K', 7, 0);
+            draw_text(1, 5, b"T1", 7, 0);
+            draw_text_large(4, 1, n1, GREENS);
+            draw_char(35, 5, b'K', 7, 0);
 
-        draw_text(1, 11, b"T2", 7, 0);
-        draw_text_large(4, 2, n2, if over { REDS } else { GREENS });
-        draw_char(35, 11, b'K', 7, 0);
-        if over {
-            draw_image(35*CHARW, 9*CHARH, ARROW_UP, ARROW_SIZE, 196);
-        }
+            draw_text(1, 11, b"T2", 7, 0);
+            draw_text_large(4, 2, n2, if over { REDS } else { GREENS });
+            draw_char(35, 11, b'K', 7, 0);
+            if over {
+                draw_image(35*CHARW, 9*CHARH, ARROW_UP, ARROW_SIZE, 196);
+            }
 
-        draw_text_large(14, 1, b"0.576e-4", WHITES);
-        draw_text(72, 5, b"mbar", 7, 0);
+            draw_text_large(14, 1, b"0.576e-4", WHITES);
+            draw_text(72, 5, b"mbar", 7, 0);
 
-        for _ in 0..500 {
-            delay.delay_ms(1u32);
+            if marq_off + marq_len <= MARQUEE.len() {
+                draw_text(45, 11, &MARQUEE[marq_off..marq_off+marq_len], 255, 1);
+            } else {
+                let remain = MARQUEE.len() - marq_off;
+                draw_text(45 + remain as u16, 11, &MARQUEE[marq_off..], 255, 1);
+                draw_text(45, 11, &MARQUEE[..marq_len - remain], 255, 1);
+            }
+
+            marq_off = (marq_off + 1) % MARQUEE.len();
+
+            for _ in 0..500 {
+                delay.delay_ms(1u32);
+            }
         }
     }
 
