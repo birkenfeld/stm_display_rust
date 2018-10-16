@@ -20,7 +20,6 @@ use btoi::btoi;
 use arraydeque::ArrayDeque;
 use hal::time::*;
 use hal::timer::Timer;
-//use hal::delay::Delay;
 use hal::rcc::RccExt;
 use hal::gpio::GpioExt;
 use hal::flash::FlashExt;
@@ -30,22 +29,46 @@ use hal_base::prelude::*;
 mod util;
 mod font;
 
-entry!(main);
+/// Width and height of visible screen.
+const WIDTH: u16 = 480;
+const HEIGHT: u16 = 128;
 
-const WIDTH: usize = 480;
-const HEIGHT: usize = 128;
-const COLS: u16 = 80;
-const ROWS: u16 = 12;
+/// Size of a character.
 const CHARH: u16 = 10;
 const CHARW: u16 = 6;
+
+/// Number of characters in the visible screen.
+const COLS: u16 = WIDTH / CHARW;
+const ROWS: u16 = HEIGHT / CHARH;
+
+/// Horizontal display timing.
+const H_SYNCPULSE:  u16 = 11;
+const H_BACKPORCH:  u16 = 5;
+const H_ACTIVE:     u16 = WIDTH;
+const H_FRONTPORCH: u16 = 28;
+
+/// Vertical display timing.
+const V_SYNCPULSE:  u16 = 2;
+const V_BACKPORCH:  u16 = 3;
+const V_ACTIVE:     u16 = 272;  // different from HEIGHT!
+const V_FRONTPORCH: u16 = 8;
+
+/// Upper-left corner of screen for layer windows.
+const H_WIN_START:  u16 = H_SYNCPULSE + H_BACKPORCH - 1;
+const V_WIN_START:  u16 = V_SYNCPULSE + V_BACKPORCH - 1;
+
+/// Default colors.
 const DEFAULT_COLOR: u8 = 7;
 const DEFAULT_BKGRD: u8 = 0;
-const FULLH: usize = HEIGHT+CHARH as usize;
+const CURSOR_COLOR:  u8 = 127;
+
+// Size of framebuffer: includes one extra row for scrolling via DMA
+const FB_SIZE: usize = (WIDTH as usize) * ((HEIGHT + CHARH) as usize);
 
 // main framebuffer
-static mut FRAMEBUF: [u8; WIDTH*FULLH] = [0; WIDTH*FULLH];
+static mut FRAMEBUF: [u8; FB_SIZE] = [0; FB_SIZE];
 // cursor framebuffer, just the cursor itself
-static CURSORBUF: [u8; 6] = [127; 6];
+static CURSORBUF: [u8; CHARW as usize] = [CURSOR_COLOR; CHARW as usize];
 
 // TX receive buffer
 static mut RXBUF: Option<ArrayDeque<[u8; 256]>> = None;
@@ -53,6 +76,8 @@ static mut RXBUF: Option<ArrayDeque<[u8; 256]>> = None;
 fn fifo() -> &'static mut ArrayDeque<[u8; 256]> {
     unsafe { RXBUF.get_or_insert_with(ArrayDeque::new) }
 }
+
+entry!(main);
 
 fn main() -> ! {
     // let mut stdout = hio::hstdout().unwrap();
@@ -70,7 +95,6 @@ fn main() -> ! {
     write!(FLASH.acr: dcen = true, icen = true, prften = true);
     let mut flash = peri.FLASH.constrain();
     let clocks = rcc.cfgr.freeze(&mut flash.acr);
-//    let mut time = Delay::new(pcore.SYST, clocks);
 
     // set up pins
     let mut gpioa = peri.GPIOA.split(&mut rcc.ahb1);
@@ -85,6 +109,10 @@ fn main() -> ! {
 
     led1.set_low();
     led2.set_high();
+
+    // LCD_enable
+    let mut disp_on = gpioa.pa8.into_push_pull_output(&mut gpioa.moder, &mut gpioa.otyper);
+    disp_on.set_low();
 
     // set up blinking timer
     let mut timer = Timer::tim3(peri.TIM3, Hertz(4), clocks, &mut rcc.apb1);
@@ -124,11 +152,6 @@ fn main() -> ! {
     gpioe.pe14.into_lcd(&mut gpioe.moder, &mut gpioe.ospeedr, &mut gpioe.afrh, 0xE);
     gpioe.pe15.into_lcd(&mut gpioe.moder, &mut gpioe.ospeedr, &mut gpioe.afrh, 0xE);
 
-    // LCD_enable
-    let mut disp_on = gpioa.pa8.into_push_pull_output(&mut gpioa.moder, &mut gpioa.otyper);
-    disp_on.set_low();
-
-
     // enable clocks
     modif!(RCC.apb2enr: ltdcen = true);
     modif!(RCC.ahb1enr: dma2den = true);
@@ -152,39 +175,40 @@ fn main() -> ! {
     write!(DMA2D.fgor: lo = 0);
     write!(DMA2D.omar: ma = FRAMEBUF.as_ptr() as u32);
     write!(DMA2D.oor: lo = 0);
-    write!(DMA2D.nlr: pl = WIDTH as u16, nl = HEIGHT as u16);
+    write!(DMA2D.nlr: pl = WIDTH, nl = HEIGHT);
 
     // Configure LCD timings
-    write!(LTDC.sscr: hsw = 10, vsh = 2);            // Vsync, Hsync
-    write!(LTDC.bpcr: ahbp = 10+6, avbp = 2+4);         // Back porch
-    write!(LTDC.awcr: aaw = 10+6+480, aah = 2+4+272);        // Active width
-    write!(LTDC.twcr: totalw = 10+6+480+28, totalh = 2+4+272+8);  // Total width
+    write!(LTDC.sscr: hsw = H_SYNCPULSE - 1, vsh = V_SYNCPULSE - 1); // -1 required by STM
+    write!(LTDC.bpcr: ahbp = H_WIN_START, avbp = V_WIN_START);
+    write!(LTDC.awcr: aaw = H_WIN_START + H_ACTIVE, aah = V_WIN_START + V_ACTIVE);
+    write!(LTDC.twcr: totalw = H_WIN_START + H_ACTIVE + H_FRONTPORCH,
+           totalh = V_WIN_START + V_ACTIVE + V_FRONTPORCH);
 
     // Configure layer 1 (main framebuffer)
 
     // Horizontal and vertical window (coordinates include porches)
-    write!(LTDC.l1whpcr: whstpos = 10+6+1, whsppos = 10+6+480);
-    write!(LTDC.l1wvpcr: wvstpos = 2+4+1,  wvsppos = 2+4+128);   // DISPLAY_HEIGHT !!!
+    write!(LTDC.l1whpcr: whstpos = H_WIN_START + 1, whsppos = H_WIN_START + WIDTH);
+    write!(LTDC.l1wvpcr: wvstpos = V_WIN_START + 1, wvsppos = V_WIN_START + HEIGHT);
     // Pixel format
     write!(LTDC.l1pfcr: pf = 0b101);  // 8-bit (CLUT enabled below)
     // Constant alpha value
     write!(LTDC.l1cacr: consta = 0xFF);
     // Default color values
-    write!(LTDC.l1dccr:  dcalpha = 0, dcred = 0, dcgreen = 0, dcblue = 0);
+    write!(LTDC.l1dccr: dcalpha = 0, dcred = 0, dcgreen = 0, dcblue = 0);
     // Blending factors
     write!(LTDC.l1bfcr: bf1 = 4, bf2 = 5);  // Constant alpha
     // Color frame buffer start address
     write!(LTDC.l1cfbar: cfbadd = FRAMEBUF.as_ptr() as u32);
     // Color frame buffer line length (active*bpp + 3), and pitch
-    write!(LTDC.l1cfblr: cfbll = 480 + 3, cfbp = 480);
+    write!(LTDC.l1cfblr: cfbll = WIDTH + 3, cfbp = WIDTH);
     // Frame buffer number of lines
-    write!(LTDC.l1cfblnr: cfblnbr = 128);
+    write!(LTDC.l1cfblnr: cfblnbr = HEIGHT);
 
     // Set up 256-color ANSI LUT
     for v in 0..16 {
-        let b = (v & 1 != 0) as u8;
+        let b = (v & 4 != 0) as u8;
         let g = (v & 2 != 0) as u8;
-        let r = (v & 4 != 0) as u8;
+        let r = (v & 1 != 0) as u8;
         let i = (v & 8 != 0) as u8;
         write!(LTDC.l1clutwr: clutadd = v,
                red = 0x55*(r<<1 | i), green = 0x55*(g<<1 | i), blue = 0x55*(b<<1 | i));
@@ -204,15 +228,15 @@ fn main() -> ! {
     // Configure layer 2 (cursor)
 
     // initial position: top left character
-    write!(LTDC.l2whpcr: whstpos = 10+6+1, whsppos = 10+6+CHARW);
-    write!(LTDC.l2wvpcr: wvstpos = 2+4+CHARH,  wvsppos = 2+4+CHARH);
+    write!(LTDC.l2whpcr: whstpos = H_WIN_START + 1, whsppos = H_WIN_START + CHARW);
+    write!(LTDC.l2wvpcr: wvstpos = V_WIN_START + CHARH, wvsppos = V_WIN_START + CHARH);
     write!(LTDC.l2pfcr: pf = 0b101);  // L-8 without CLUT
     write!(LTDC.l2cacr: consta = 0xFF);
     write!(LTDC.l2dccr: dcalpha = 0, dcred = 0, dcgreen = 0, dcblue = 0);
     write!(LTDC.l2bfcr: bf1 = 6, bf2 = 7);  // Constant alpha * Pixel alpha
     write!(LTDC.l2cfbar: cfbadd = CURSORBUF.as_ptr() as u32);
-    write!(LTDC.l2cfblr: cfbll = 1 + 3, cfbp = 1);
-    write!(LTDC.l2cfblnr: cfblnbr = 6);
+    write!(LTDC.l2cfblr: cfbll = CHARW + 3, cfbp = CHARW);
+    write!(LTDC.l2cfblnr: cfblnbr = 1);  // Cursor is one line of 6 pixels
 
     // Enable layer1, disable layer2 initially
     modif!(LTDC.l1cr: cluten = true, len = true);
@@ -242,12 +266,27 @@ fn main() -> ! {
     draw(COLS-3, 1, b'O', 0b1010, 0b1100);
     draw(COLS-2, 1, b'K', 0b1010, 0b1100);
 
+    unsafe {
+        for &y in &[0, HEIGHT-1] {
+            for x in 0..WIDTH {
+                FRAMEBUF[x as usize + (y * WIDTH) as usize] = 0xff;
+            }
+        }
+        for &x in &[0, WIDTH-1] {
+            for y in 0..HEIGHT {
+                FRAMEBUF[x as usize + (y * WIDTH) as usize] = 0xff;
+            }
+        }
+    }
+
     main_loop(console_tx)
 }
 
 fn cursor(cx: u16, cy: u16) {
-    write!(LTDC.l2whpcr: whstpos = 10+6+1+cx*CHARW, whsppos =10+6+CHARW+cx*CHARW);
-    write!(LTDC.l2wvpcr: wvstpos = 2+4+(cy+1)*CHARH, wvsppos = 2+4+(cy+1)*CHARH);
+    write!(LTDC.l2whpcr: whstpos = H_WIN_START + cx*CHARW + 1,
+           whsppos = H_WIN_START + (cx + 1)*CHARW);
+    write!(LTDC.l2wvpcr: wvstpos = V_WIN_START + (cy + 1)*CHARH,
+           wvsppos = V_WIN_START + (cy + 1)*CHARH);
     // reload on next vsync
     write!(LTDC.srcr: vbr = true);
 }
@@ -255,7 +294,7 @@ fn cursor(cx: u16, cy: u16) {
 fn draw(cx: u16, cy: u16, ch: u8, color: u8, bkgrd: u8) {
     font::FONT[ch as usize].iter().zip(cy*CHARH..(cy+1)*CHARH).for_each(|(charrow, y)| {
         (0..CHARW).for_each(|x| unsafe {
-            FRAMEBUF[(x + cx*CHARW) as usize + y as usize * WIDTH] =
+            FRAMEBUF[(x + cx*CHARW) as usize + (y * WIDTH) as usize] =
                 if charrow & (1 << (CHARW - 1 - x)) != 0 { color } else { bkgrd };
         });
     });
