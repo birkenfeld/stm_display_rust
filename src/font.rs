@@ -1,3 +1,6 @@
+pub const FONT_LARGE: &[u8] = include_bytes!("font_large.raw");
+pub const FONT_L_COLS: usize = 12 * 20;
+
 pub const FONT: [[u8; 10]; 256] = [
     [
         0b000000, // 0x00 ''

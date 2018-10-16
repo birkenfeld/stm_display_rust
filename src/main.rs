@@ -9,6 +9,7 @@ extern crate panic_semihosting;
 extern crate nb;
 extern crate btoi;
 extern crate arraydeque;
+extern crate bresenham;
 extern crate embedded_hal as hal_base;
 extern crate cortex_m as arm;
 #[macro_use]
@@ -41,6 +42,11 @@ const CHARW: u16 = 6;
 /// Number of characters in the visible screen.
 const COLS: u16 = WIDTH / CHARW;
 const ROWS: u16 = HEIGHT / CHARH;
+
+/// Size of a character.
+const LINEH_L: u16 = 40;
+const CHARW_L: u16 = 20;
+const CHARH_L: u16 = 30;
 
 /// Horizontal display timing.
 const H_SYNCPULSE:  u16 = 11;
@@ -77,6 +83,10 @@ static mut RXBUF: Option<ArrayDeque<[u8; 256]>> = None;
 // Publicity
 const MLZLOGO: &[u8] = include_bytes!("logo_mlz.raw");
 const MLZLOGO_SIZE: (u16, u16) = (240, 84);
+
+const ARROW_UP: &[u8] = &[16, 56, 124, 254];
+// const ARROW_DN: &[u8] = &[254, 124, 56, 16];
+const ARROW_SIZE: (u16, u16) = (8, 4);
 
 mod lorem;
 
@@ -275,34 +285,17 @@ fn main() -> ! {
     led1.set_high();
     led2.set_low();
 
-    for x in 0..WIDTH {
-        for y in 0..HEIGHT {
-            set_pixel(x, y, 255);
-        }
-    }
+    clear_screen(255);
 
     let off_x = (WIDTH - MLZLOGO_SIZE.0) / 2;
     let off_y = (HEIGHT - MLZLOGO_SIZE.1) / 2;
+    draw_image(off_x, off_y, MLZLOGO, MLZLOGO_SIZE, 95);
 
-    for x in 0..MLZLOGO_SIZE.0 {
-        for y in 0..MLZLOGO_SIZE.1 {
-            let byte = MLZLOGO[(x + y*MLZLOGO_SIZE.0) as usize / 8];
-            if byte & (1 << (x % 8)) != 0 {
-                // MLZ color approximation: #333366 instead of #2d3d72
-                set_pixel(off_x + x, off_y + y, 95);
-            }
-        }
-    }
-
-    for _ in 0..1000 {
+    for _ in 0..2000 {
         delay.delay_ms(1u32);
     }
 
-    for x in 0..WIDTH {
-        for y in 0..HEIGHT {
-            set_pixel(x, y, 0);
-        }
-    }
+    clear_screen(0);
 
     let mut cx = 0;
     let mut cy = 0;
@@ -324,8 +317,58 @@ fn main() -> ! {
         }
     }
 
+    for _ in 0..2000 {
+        delay.delay_ms(1u32);
+    }
+
+    for &(n1, n2, over) in VAL_DISPLAY {
+        clear_screen(0);
+
+        draw_text(72, 0, b"ccr12.ictrl.frm2", 255, 0);
+        draw_line(0, 15, WIDTH-1, 15, 255);
+        draw_line(240, 0, 240, HEIGHT-1, 33);
+
+        draw_text(1, 5, b"T1", 7, 0);
+        draw_text_large(4, 1, n1, GREENS);
+        draw_char(35, 5, b'K', 7, 0);
+
+        draw_text(1, 11, b"T2", 7, 0);
+        draw_text_large(4, 2, n2, if over { REDS } else { GREENS });
+        draw_char(35, 11, b'K', 7, 0);
+        if over {
+            draw_image(35*CHARW, 9*CHARH, ARROW_UP, ARROW_SIZE, 196);
+        }
+
+        draw_text_large(14, 1, b"0.576e-4", WHITES);
+        draw_text(72, 5, b"mbar", 7, 0);
+
+        for _ in 0..500 {
+            delay.delay_ms(1u32);
+        }
+    }
+
     main_loop(console_tx)
 }
+
+const WHITES: &[u8; 4] = &[0, 239, 247, 255];
+const REDS:   &[u8; 4] = &[0, 52, 124, 196];
+const GREENS: &[u8; 4] = &[0, 28, 34, 46];
+// const BLUES:  &[u8; 4] = &[0, 18, 21, 33];
+
+const VAL_DISPLAY: &[(&[u8], &[u8], bool)] = &[
+    (b"15.42", b"37.00", true),
+    (b"15.52", b"37.05", true),
+    (b"15.53", b"37.04", true),
+    (b"15.44", b"37.02", true),
+    (b"15.57", b"37.01", true),
+    (b"15.47", b"37.00", true),
+    (b"15.50", b"36.97", false),
+    (b"15.51", b"36.95", false),
+    (b"15.49", b"36.91", false),
+    (b"15.40", b"36.90", false),
+    (b"15.50", b"36.93", false),
+    (b"15.51", b"36.97", false),
+];
 
 fn cursor(cx: u16, cy: u16) {
     write!(LTDC.l2whpcr: whstpos = H_WIN_START + cx*CHARW + 1,
@@ -343,6 +386,38 @@ fn set_pixel(x: u16, y: u16, color: u8) {
     }
 }
 
+fn clear_screen(color: u8) {
+    // TODO: use DMA?
+    for x in 0..WIDTH {
+        for y in 0..HEIGHT {
+            set_pixel(x, y, color);
+        }
+    }
+}
+
+fn draw_image(px: u16, py: u16, img: &[u8], size: (u16, u16), color: u8) {
+    for x in 0..size.0 {
+        for y in 0..size.1 {
+            let byte = img[(x + y*size.0) as usize / 8];
+            if byte & (1 << (x % 8)) != 0 {
+                set_pixel(px + x, py + y, color);
+            }
+        }
+    }
+}
+
+fn draw_line(x1: u16, y1: u16, x2: u16, y2: u16, color: u8) {
+    for (x, y) in bresenham::Bresenham::new((x1 as isize, y1 as isize), (x2 as isize, y2 as isize)) {
+        set_pixel(x as u16, y as u16, color);
+    }
+}
+
+fn draw_text(cx: u16, cy: u16, text: &[u8], color: u8, bkgrd: u8) {
+    for (i, &ch) in text.iter().enumerate() {
+        draw_char(cx + i as u16, cy, ch, color, bkgrd);
+    }
+}
+
 fn draw_char(cx: u16, cy: u16, ch: u8, color: u8, bkgrd: u8) {
     font::FONT[ch as usize].iter().zip(cy*CHARH..(cy+1)*CHARH).for_each(|(charrow, y)| {
         (0..CHARW).for_each(|x| {
@@ -350,6 +425,33 @@ fn draw_char(cx: u16, cy: u16, ch: u8, color: u8, bkgrd: u8) {
                       if charrow & (1 << (CHARW - 1 - x)) != 0 { color } else { bkgrd });
         });
     });
+}
+
+fn draw_text_large(cx: u16, cy: u16, text: &[u8], colors: &[u8; 4]) {
+    for (i, &ch) in text.iter().enumerate() {
+        draw_char_large(cx + i as u16, cy, ch, colors);
+    }
+}
+
+fn draw_char_large(cx: u16, cy: u16, ch: u8, colors: &[u8; 4]) {
+    let off_ch = (CHARW_L as usize) * match ch {
+        b'0' ..= b'9' => (ch - b'0') as usize,
+        b'.'          => 10,
+        b'e'          => 11,
+        _             => 0,
+    };
+    let off_x = cx*CHARW_L;
+    let off_y = cy*LINEH_L;
+    for x in 0..CHARW_L {
+        for y in 0..5 {
+            set_pixel(off_x + x, off_y + y, colors[0]);
+            set_pixel(off_x + x, off_y + y + 35, colors[0]);
+        }
+        for y in 0..CHARH_L {
+            let idx = off_ch + x as usize + y as usize*font::FONT_L_COLS;
+            set_pixel(off_x + x, off_y + 5 + y, colors[font::FONT_LARGE[idx] as usize]);
+        }
+    }
 }
 
 fn process_escape(end: u8, seq: &[u8], cx: &mut u16, cy: &mut u16, color: &mut u8, bkgrd: &mut u8) {
@@ -395,11 +497,7 @@ fn process_escape(end: u8, seq: &[u8], cx: &mut u16, cy: &mut u16, color: &mut u
         }
         b'J' => {
             // TODO: process arguments
-            for x in 0..WIDTH {
-                for y in 0..HEIGHT {
-                    set_pixel(x, y, 0);
-                }
-            }
+            clear_screen(0);
             *cx = 0;
             *cy = 0;
         },
