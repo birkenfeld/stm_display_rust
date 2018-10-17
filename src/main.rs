@@ -106,21 +106,6 @@ const REDS:   &[u8; 4] = &[0, 52, 124, 196];
 const GREENS: &[u8; 4] = &[0, 28, 34, 46];
 // const BLUES:  &[u8; 4] = &[0, 18, 21, 33];
 
-const VAL_DISPLAY: &[(&[u8], &[u8], bool)] = &[
-    (b"15.421", b"37.008", true),
-    (b"15.527", b"37.056", true),
-    (b"15.539", b"37.041", true),
-    (b"15.442", b"37.027", true),
-    (b"15.571", b"37.012", true),
-    (b"15.472", b"37.004", true),
-    (b"15.508", b"36.971", false),
-    (b"15.517", b"36.954", false),
-    (b"15.493", b"36.913", false),
-    (b"15.403", b"36.907", false),
-    (b"15.504", b"36.938", false),
-    (b"--.---", b"36.979", false),
-];
-
 mod lorem;
 
 fn fifo() -> &'static mut ArrayDeque<[u8; 256]> {
@@ -323,15 +308,15 @@ fn main() -> ! {
     let off_y = (HEIGHT - MLZLOGO_SIZE.1) / 2;
     draw_image(off_x, off_y, MLZLOGO, MLZLOGO_SIZE, MLZ_COLOR);
 
-    for _ in 0..2 {
-        delay.delay_ms(1u32);
+    for _ in 0..500 {
+        delay.delay_ms(10u32);
     }
 
     clear_screen(0);
 
     let mut cx = 0;
     let mut cy = 0;
-    for line in lorem::TEXT {
+    for line in lorem::BOOTUP {
         for &chr in *line {
             draw_char(cx, cy, chr, DEFAULT_COLOR, DEFAULT_BKGRD);
             cx = (cx + 1) % COLS;
@@ -344,13 +329,11 @@ fn main() -> ! {
             wait_for!(DMA2D.cr: start);
             cy -= 1;
         }
-        for _ in 0..10 {
-            delay.delay_ms(1u32);
-        }
+        delay.delay_ms(20u32);
     }
 
-    for _ in 0..2 {
-        delay.delay_ms(1u32);
+    for _ in 0..500 {
+        delay.delay_ms(10u32);
     }
 
     clear_screen(0);
@@ -361,10 +344,8 @@ fn main() -> ! {
                              cold head has spontaneously combusted --- ";
 
     for j in 0..10000 {
-        for &(n1, n2, over) in VAL_DISPLAY {
-            // clear_screen(0);
-
-            draw_text_m(21*8, 0, b"ccr12.kompass.frm2", 240, 0);
+        for &(n1, n2, over) in lorem::DISPLAY {
+            draw_text_m(21*8, 0, b"ccr12.kompass.frm2", 245, 0);
             draw_line(0, 15, WIDTH-1, 15, 255);
             draw_line(240, 15, 240, HEIGHT-17, 255);
             draw_line(0, HEIGHT-17, WIDTH-1, HEIGHT-17, 255);
@@ -379,7 +360,10 @@ fn main() -> ! {
             draw_image( 210, 87, ARROW_UP, ARROW_SIZE, if over { 196 } else { 0 });
 
             draw_text_l(260, 22, b"0.576e-1", WHITES);
-            draw_text_m(440, 45, b"mbar", 7, 0);
+            draw_text_m(430, 45, b"mbar", 7, 0);
+
+            draw_text_l(260, 64, b"--.---", WHITES);
+            draw_text_m(430, 87, b"mbar", 7, 0);
 
             if j > 2 {
 
@@ -399,12 +383,13 @@ fn main() -> ! {
 
             }
 
-            for _ in 0..500 {
-                delay.delay_ms(1u32);
+            for _ in 0..50 {
+                delay.delay_ms(10u32);
             }
         }
     }
 
+    clear_screen(0);
     timer.listen(hal::timer::Event::TimeOut);
     main_loop(console_tx)
 }
