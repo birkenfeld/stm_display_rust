@@ -30,6 +30,7 @@ use hal_base::prelude::*;
 #[macro_use]
 mod util;
 mod font;
+mod terminus;
 
 /// Width and height of visible screen.
 const WIDTH: u16 = 480;
@@ -39,12 +40,15 @@ const HEIGHT: u16 = 128;
 const CHARH: u16 = 10;
 const CHARW: u16 = 6;
 
+/// Size of a character.
+const CHARH_M: u16 = 16;
+const CHARW_M: u16 = 8;
+
 /// Number of characters in the visible screen.
 const COLS: u16 = WIDTH / CHARW;
 const ROWS: u16 = HEIGHT / CHARH;
 
 /// Size of a character.
-const LINEH_L: u16 = 40;
 const CHARW_L: u16 = 20;
 const CHARH_L: u16 = 30;
 
@@ -83,10 +87,39 @@ static mut RXBUF: Option<ArrayDeque<[u8; 256]>> = None;
 // Publicity
 const MLZLOGO: &[u8] = include_bytes!("logo_mlz.raw");
 const MLZLOGO_SIZE: (u16, u16) = (240, 84);
+const MLZ_COLOR: u8 = 60;
 
-const ARROW_UP: &[u8] = &[16, 56, 124, 254];
-// const ARROW_DN: &[u8] = &[254, 124, 56, 16];
-const ARROW_SIZE: (u16, u16) = (8, 4);
+const ARROW_UP: &[u8] = &[
+    0b10000000, 0b00000001,
+    0b11000000, 0b00000011,
+    0b11100000, 0b00000111,
+    0b11110000, 0b00001111,
+    0b11111000, 0b00011111,
+    0b11111100, 0b00111111,
+    0b11111110, 0b01111111,
+    0b11111111, 0b11111111
+];
+const ARROW_SIZE: (u16, u16) = (16, 8);
+
+const WHITES: &[u8; 4] = &[0, 239, 247, 255];
+const REDS:   &[u8; 4] = &[0, 52, 124, 196];
+const GREENS: &[u8; 4] = &[0, 28, 34, 46];
+// const BLUES:  &[u8; 4] = &[0, 18, 21, 33];
+
+const VAL_DISPLAY: &[(&[u8], &[u8], bool)] = &[
+    (b"15.421", b"37.008", true),
+    (b"15.527", b"37.056", true),
+    (b"15.539", b"37.041", true),
+    (b"15.442", b"37.027", true),
+    (b"15.571", b"37.012", true),
+    (b"15.472", b"37.004", true),
+    (b"15.508", b"36.971", false),
+    (b"15.517", b"36.954", false),
+    (b"15.493", b"36.913", false),
+    (b"15.403", b"36.907", false),
+    (b"15.504", b"36.938", false),
+    (b"--.---", b"36.979", false),
+];
 
 mod lorem;
 
@@ -134,7 +167,6 @@ fn main() -> ! {
 
     // set up blinking timer
     let mut timer = Timer::tim3(peri.TIM3, Hertz(4), clocks, &mut rcc.apb1);
-    timer.listen(hal::timer::Event::TimeOut);
 
     // Console UART (UART #3)
     let utx = gpiod.pd8 .into_af7(&mut gpiod.moder, &mut gpiod.afrh);
@@ -237,7 +269,7 @@ fn main() -> ! {
     for r in 0..6 {
         for g in 0..6 {
             for b in 0..6 {
-                write!(LTDC.l1clutwr: clutadd = 16 + 36*b + 6*g + r,
+                write!(LTDC.l1clutwr: clutadd = 16 + 36*r + 6*g + b,
                        red = 0x33*r, green = 0x33*g, blue = 0x33*b);
             }
         }
@@ -289,9 +321,9 @@ fn main() -> ! {
 
     let off_x = (WIDTH - MLZLOGO_SIZE.0) / 2;
     let off_y = (HEIGHT - MLZLOGO_SIZE.1) / 2;
-    draw_image(off_x, off_y, MLZLOGO, MLZLOGO_SIZE, 95);
+    draw_image(off_x, off_y, MLZLOGO, MLZLOGO_SIZE, MLZ_COLOR);
 
-    for _ in 0..2000 {
+    for _ in 0..2 {
         delay.delay_ms(1u32);
     }
 
@@ -317,45 +349,55 @@ fn main() -> ! {
         }
     }
 
-    for _ in 0..2000 {
+    for _ in 0..2 {
         delay.delay_ms(1u32);
     }
 
+    clear_screen(0);
+
     let mut marq_off = 0;
-    let marq_len = 30;
-    const MARQUEE: &[u8] = b"compressor off, cooling water temperature alarm --- ";
-    for _ in 0..10000 {
+    let marq_len = 58;
+    const MARQUEE: &[u8] = b"compressor off, cooling water temperature alarm, \
+                             cold head has spontaneously combusted --- ";
+
+    for j in 0..10000 {
         for &(n1, n2, over) in VAL_DISPLAY {
-            clear_screen(0);
+            // clear_screen(0);
 
-            draw_text(72, 0, b"ccr12.ictrl.frm2", 255, 0);
+            draw_text_m(21*8, 0, b"ccr12.kompass.frm2", 240, 0);
             draw_line(0, 15, WIDTH-1, 15, 255);
-            draw_line(240, 15, 240, HEIGHT-15, 33);
-            draw_line(0, 100, WIDTH-1, 100, 255);
+            draw_line(240, 15, 240, HEIGHT-17, 255);
+            draw_line(0, HEIGHT-17, WIDTH-1, HEIGHT-17, 255);
 
-            draw_text(1, 5, b"T1", 7, 0);
-            draw_text_large(4, 1, n1, GREENS);
-            draw_char(35, 5, b'K', 7, 0);
+            draw_text_m(10,  45, b"T1", 7, 0);
+            draw_text_l(40,  22, n1, GREENS);
+            draw_text_m(175, 45, b"K", 7, 0);
 
-            draw_text(1, 11, b"T2", 7, 0);
-            draw_text_large(4, 2, n2, if over { REDS } else { GREENS });
-            draw_char(35, 11, b'K', 7, 0);
-            if over {
-                draw_image(35*CHARW, 9*CHARH, ARROW_UP, ARROW_SIZE, 196);
+            draw_text_m(10,  87, b"T2", 7, 0);
+            draw_text_l(40,  64, n2, if over { REDS } else { GREENS });
+            draw_text_m(175, 87, b"K", 7, 0);
+            draw_image( 210, 87, ARROW_UP, ARROW_SIZE, if over { 196 } else { 0 });
+
+            draw_text_l(260, 22, b"0.576e-1", WHITES);
+            draw_text_m(440, 45, b"mbar", 7, 0);
+
+            if j > 2 {
+
+                draw_text_m(0, 112, b" ", 255, 1);
+                if MARQUEE.len() <= marq_len {
+                    draw_text_m(8, 112, MARQUEE, 255, 1);
+                } else if marq_off + marq_len <= MARQUEE.len() {
+                    draw_text_m(8, 112, &MARQUEE[marq_off..marq_off+marq_len], 255, 1);
+                } else {
+                    let remain = MARQUEE.len() - marq_off;
+                    draw_text_m(8, 112, &MARQUEE[marq_off..], 255, 1);
+                    draw_text_m(8 * (1 + remain as u16), 112, &MARQUEE[..marq_len - remain], 255, 1);
+                }
+                draw_text_m(472, 112, b" ", 255, 1);
+
+                marq_off = (marq_off + 1) % MARQUEE.len();
+
             }
-
-            draw_text_large(14, 1, b"0.576e-4", WHITES);
-            draw_text(72, 5, b"mbar", 7, 0);
-
-            if marq_off + marq_len <= MARQUEE.len() {
-                draw_text(45, 11, &MARQUEE[marq_off..marq_off+marq_len], 255, 1);
-            } else {
-                let remain = MARQUEE.len() - marq_off;
-                draw_text(45 + remain as u16, 11, &MARQUEE[marq_off..], 255, 1);
-                draw_text(45, 11, &MARQUEE[..marq_len - remain], 255, 1);
-            }
-
-            marq_off = (marq_off + 1) % MARQUEE.len();
 
             for _ in 0..500 {
                 delay.delay_ms(1u32);
@@ -363,28 +405,9 @@ fn main() -> ! {
         }
     }
 
+    timer.listen(hal::timer::Event::TimeOut);
     main_loop(console_tx)
 }
-
-const WHITES: &[u8; 4] = &[0, 239, 247, 255];
-const REDS:   &[u8; 4] = &[0, 52, 124, 196];
-const GREENS: &[u8; 4] = &[0, 28, 34, 46];
-// const BLUES:  &[u8; 4] = &[0, 18, 21, 33];
-
-const VAL_DISPLAY: &[(&[u8], &[u8], bool)] = &[
-    (b"15.42", b"37.00", true),
-    (b"15.52", b"37.05", true),
-    (b"15.53", b"37.04", true),
-    (b"15.44", b"37.02", true),
-    (b"15.57", b"37.01", true),
-    (b"15.47", b"37.00", true),
-    (b"15.50", b"36.97", false),
-    (b"15.51", b"36.95", false),
-    (b"15.49", b"36.91", false),
-    (b"15.40", b"36.90", false),
-    (b"15.50", b"36.93", false),
-    (b"15.51", b"36.97", false),
-];
 
 fn cursor(cx: u16, cy: u16) {
     write!(LTDC.l2whpcr: whstpos = H_WIN_START + cx*CHARW + 1,
@@ -428,9 +451,45 @@ fn draw_line(x1: u16, y1: u16, x2: u16, y2: u16, color: u8) {
     }
 }
 
-fn draw_text(cx: u16, cy: u16, text: &[u8], color: u8, bkgrd: u8) {
+fn draw_text_m(px: u16, py: u16, text: &[u8], color: u8, bkgrd: u8) {
     for (i, &ch) in text.iter().enumerate() {
-        draw_char(cx + i as u16, cy, ch, color, bkgrd);
+        draw_char_m(px + i as u16 * CHARW_M, py, ch, color, bkgrd);
+    }
+}
+
+fn draw_char_m(px: u16, py: u16, ch: u8, color: u8, bkgrd: u8) {
+    terminus::FONT_TERM[ch as usize].iter().zip(0..CHARH_M).for_each(|(charrow, y)| {
+        (0..CHARW_M).for_each(|x| {
+            set_pixel(px + x, py + y,
+                      if charrow & (1 << (CHARW_M - 1 - x)) != 0 { color } else { bkgrd });
+        });
+    });
+}
+
+fn draw_text_l(px: u16, py: u16, text: &[u8], colors: &[u8; 4]) {
+    for (i, &ch) in text.iter().enumerate() {
+        draw_char_l(px + i as u16 * CHARW_L, py, ch, colors);
+    }
+}
+
+fn draw_char_l(px: u16, py: u16, ch: u8, colors: &[u8; 4]) {
+    let off_ch = (CHARW_L as usize) * match ch {
+        b'0' ..= b'9' => (ch - b'0') as usize,
+        b'+'          => 10,
+        b'-'          => 11,
+        b'.'          => 12,
+        b'e'          => 13,
+        _             => 0,
+    };
+    for x in 0..CHARW_L {
+        for y in 0..5 {
+            set_pixel(px + x, py + y, colors[0]);
+            set_pixel(px + x, py + y + 35, colors[0]);
+        }
+        for y in 0..CHARH_L {
+            let idx = off_ch + x as usize + y as usize*font::FONT_L_COLS;
+            set_pixel(px + x, py + 5 + y, colors[font::FONT_LARGE[idx] as usize]);
+        }
     }
 }
 
@@ -441,33 +500,6 @@ fn draw_char(cx: u16, cy: u16, ch: u8, color: u8, bkgrd: u8) {
                       if charrow & (1 << (CHARW - 1 - x)) != 0 { color } else { bkgrd });
         });
     });
-}
-
-fn draw_text_large(cx: u16, cy: u16, text: &[u8], colors: &[u8; 4]) {
-    for (i, &ch) in text.iter().enumerate() {
-        draw_char_large(cx + i as u16, cy, ch, colors);
-    }
-}
-
-fn draw_char_large(cx: u16, cy: u16, ch: u8, colors: &[u8; 4]) {
-    let off_ch = (CHARW_L as usize) * match ch {
-        b'0' ..= b'9' => (ch - b'0') as usize,
-        b'.'          => 10,
-        b'e'          => 11,
-        _             => 0,
-    };
-    let off_x = cx*CHARW_L;
-    let off_y = cy*LINEH_L;
-    for x in 0..CHARW_L {
-        for y in 0..5 {
-            set_pixel(off_x + x, off_y + y, colors[0]);
-            set_pixel(off_x + x, off_y + y + 35, colors[0]);
-        }
-        for y in 0..CHARH_L {
-            let idx = off_ch + x as usize + y as usize*font::FONT_L_COLS;
-            set_pixel(off_x + x, off_y + 5 + y, colors[font::FONT_LARGE[idx] as usize]);
-        }
-    }
 }
 
 fn process_escape(end: u8, seq: &[u8], cx: &mut u16, cy: &mut u16, color: &mut u8, bkgrd: &mut u8) {
