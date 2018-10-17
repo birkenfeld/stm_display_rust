@@ -1,3 +1,4 @@
+#![feature(const_slice_len)]
 #![no_main]
 #![no_std]
 
@@ -30,27 +31,20 @@ use hal_base::prelude::*;
 #[macro_use]
 mod util;
 mod font;
-mod terminus;
+
+use font::{NORMAL, LARGE, CONSOLE, GRAY, WHITE, RED, GREEN, ALARM};
 
 /// Width and height of visible screen.
 const WIDTH: u16 = 480;
 const HEIGHT: u16 = 128;
 
 /// Size of a character.
-const CHARH: u16 = 10;
-const CHARW: u16 = 6;
-
-/// Size of a character.
-const CHARH_M: u16 = 16;
-const CHARW_M: u16 = 8;
+const CHARW: u16 = font::CONSOLE.charw as u16;
+const CHARH: u16 = font::CONSOLE.charh as u16;
 
 /// Number of characters in the visible screen.
 const COLS: u16 = WIDTH / CHARW;
 const ROWS: u16 = HEIGHT / CHARH;
-
-/// Size of a character.
-const CHARW_L: u16 = 20;
-const CHARH_L: u16 = 30;
 
 /// Horizontal display timing.
 const H_SYNCPULSE:  u16 = 11;
@@ -100,11 +94,6 @@ const ARROW_UP: &[u8] = &[
     0b11111111, 0b11111111
 ];
 const ARROW_SIZE: (u16, u16) = (16, 8);
-
-const WHITES: &[u8; 4] = &[0, 239, 247, 255];
-const REDS:   &[u8; 4] = &[0, 52, 124, 196];
-const GREENS: &[u8; 4] = &[0, 28, 34, 46];
-// const BLUES:  &[u8; 4] = &[0, 18, 21, 33];
 
 mod lorem;
 
@@ -318,7 +307,7 @@ fn main() -> ! {
     let mut cy = 0;
     for line in lorem::BOOTUP {
         for &chr in *line {
-            draw_char(cx, cy, chr, DEFAULT_COLOR, DEFAULT_BKGRD);
+            CONSOLE.draw(cx * CHARW, cy * CHARH, &[chr], &GRAY);
             cx = (cx + 1) % COLS;
         }
         cx = 0;
@@ -345,42 +334,40 @@ fn main() -> ! {
 
     for j in 0..10000 {
         for &(n1, n2, over) in lorem::DISPLAY {
-            draw_text_m(21*8, 0, b"ccr12.kompass.frm2", 245, 0);
+            NORMAL.draw(21*8, 0, b"ccr12.kompass.frm2", &GRAY);
             draw_line(0, 15, WIDTH-1, 15, 255);
             draw_line(240, 15, 240, HEIGHT-17, 255);
             draw_line(0, HEIGHT-17, WIDTH-1, HEIGHT-17, 255);
 
-            draw_text_m(10,  45, b"T1", 7, 0);
-            draw_text_l(40,  22, n1, GREENS);
-            draw_text_m(175, 45, b"K", 7, 0);
+            NORMAL.draw(10,  45, b"T1", &GRAY);
+            NORMAL.draw(175, 45, b"K", &GRAY);
+            LARGE.draw(40, 27, n1, &GREEN);
 
-            draw_text_m(10,  87, b"T2", 7, 0);
-            draw_text_l(40,  64, n2, if over { REDS } else { GREENS });
-            draw_text_m(175, 87, b"K", 7, 0);
+            NORMAL.draw(10,  87, b"T2", &GRAY);
+            NORMAL.draw(175, 87, b"K", &GRAY);
+            LARGE.draw(40, 69, n2, if over { &RED } else { &GREEN });
             draw_image( 210, 87, ARROW_UP, ARROW_SIZE, if over { 196 } else { 0 });
 
-            draw_text_l(260, 22, b"0.576e-1", WHITES);
-            draw_text_m(430, 45, b"mbar", 7, 0);
+            LARGE.draw(260, 27, b"0.576e-1", &WHITE);
+            NORMAL.draw(430, 45, b"mbar", &GRAY);
 
-            draw_text_l(260, 64, b"--.---", WHITES);
-            draw_text_m(430, 87, b"mbar", 7, 0);
+            LARGE.draw(260, 69, b"--.---", &WHITE);
+            NORMAL.draw(430, 87, b"mbar", &GRAY);
 
             if j > 2 {
-
-                draw_text_m(0, 112, b" ", 255, 1);
+                NORMAL.draw(0, 112, b" ", &ALARM);
                 if MARQUEE.len() <= marq_len {
-                    draw_text_m(8, 112, MARQUEE, 255, 1);
+                    NORMAL.draw(8, 112, MARQUEE, &ALARM);
                 } else if marq_off + marq_len <= MARQUEE.len() {
-                    draw_text_m(8, 112, &MARQUEE[marq_off..marq_off+marq_len], 255, 1);
+                    NORMAL.draw(8, 112, &MARQUEE[marq_off..marq_off+marq_len], &ALARM);
                 } else {
                     let remain = MARQUEE.len() - marq_off;
-                    draw_text_m(8, 112, &MARQUEE[marq_off..], 255, 1);
-                    draw_text_m(8 * (1 + remain as u16), 112, &MARQUEE[..marq_len - remain], 255, 1);
+                    NORMAL.draw(8, 112, &MARQUEE[marq_off..], &ALARM);
+                    NORMAL.draw(8 * (1 + remain as u16), 112, &MARQUEE[..marq_len - remain], &ALARM);
                 }
-                draw_text_m(472, 112, b" ", 255, 1);
+                NORMAL.draw(472, 112, b" ", &ALARM);
 
                 marq_off = (marq_off + 1) % MARQUEE.len();
-
             }
 
             for _ in 0..50 {
@@ -434,57 +421,6 @@ fn draw_line(x1: u16, y1: u16, x2: u16, y2: u16, color: u8) {
     for (x, y) in bresenham::Bresenham::new((x1 as isize, y1 as isize), (x2 as isize, y2 as isize)) {
         set_pixel(x as u16, y as u16, color);
     }
-}
-
-fn draw_text_m(px: u16, py: u16, text: &[u8], color: u8, bkgrd: u8) {
-    for (i, &ch) in text.iter().enumerate() {
-        draw_char_m(px + i as u16 * CHARW_M, py, ch, color, bkgrd);
-    }
-}
-
-fn draw_char_m(px: u16, py: u16, ch: u8, color: u8, bkgrd: u8) {
-    terminus::FONT_TERM[ch as usize].iter().zip(0..CHARH_M).for_each(|(charrow, y)| {
-        (0..CHARW_M).for_each(|x| {
-            set_pixel(px + x, py + y,
-                      if charrow & (1 << (CHARW_M - 1 - x)) != 0 { color } else { bkgrd });
-        });
-    });
-}
-
-fn draw_text_l(px: u16, py: u16, text: &[u8], colors: &[u8; 4]) {
-    for (i, &ch) in text.iter().enumerate() {
-        draw_char_l(px + i as u16 * CHARW_L, py, ch, colors);
-    }
-}
-
-fn draw_char_l(px: u16, py: u16, ch: u8, colors: &[u8; 4]) {
-    let off_ch = (CHARW_L as usize) * match ch {
-        b'0' ..= b'9' => (ch - b'0') as usize,
-        b'+'          => 10,
-        b'-'          => 11,
-        b'.'          => 12,
-        b'e'          => 13,
-        _             => 0,
-    };
-    for x in 0..CHARW_L {
-        for y in 0..5 {
-            set_pixel(px + x, py + y, colors[0]);
-            set_pixel(px + x, py + y + 35, colors[0]);
-        }
-        for y in 0..CHARH_L {
-            let idx = off_ch + x as usize + y as usize*font::FONT_L_COLS;
-            set_pixel(px + x, py + 5 + y, colors[font::FONT_LARGE[idx] as usize]);
-        }
-    }
-}
-
-fn draw_char(cx: u16, cy: u16, ch: u8, color: u8, bkgrd: u8) {
-    font::FONT[ch as usize].iter().zip(cy*CHARH..(cy+1)*CHARH).for_each(|(charrow, y)| {
-        (0..CHARW).for_each(|x| {
-            set_pixel(x + cx*CHARW, y,
-                      if charrow & (1 << (CHARW - 1 - x)) != 0 { color } else { bkgrd });
-        });
-    });
 }
 
 fn process_escape(end: u8, seq: &[u8], cx: &mut u16, cy: &mut u16, color: &mut u8, bkgrd: &mut u8) {
@@ -588,13 +524,13 @@ fn main_loop(mut console_tx: hal::serial::Tx<stm::USART3>) -> ! {
             } else if ch == b'\x08' {
                 if cx > 0 {
                     cx -= 1;
-                    draw_char(cx, cy, b' ', color, bkgrd);
+                    CONSOLE.draw(cx * CHARW, cy * CHARH, b" ", &[bkgrd, 0, 0, color]);
                     cursor(cx, cy);
                 }
             } else if ch == b'\x1b' {
                 escape = 1;
             } else {
-                draw_char(cx, cy, ch, color, bkgrd);
+                CONSOLE.draw(cx * CHARW, cy * CHARH, &[ch], &[bkgrd, 0, 0, color]);
                 cx = (cx + 1) % COLS;
                 cursor(cx, cy);
             }
