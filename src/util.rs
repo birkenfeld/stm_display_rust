@@ -1,4 +1,4 @@
-// Utility macros/functions.
+//! Utility macros/functions.
 
 macro_rules! bitset {
     ($e:expr; $p:ident = true, $($tt:tt)+)    => { bitset!($e.$p().set_bit(); $($tt)+) };

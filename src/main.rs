@@ -30,8 +30,10 @@ use hal_base::prelude::*;
 
 #[macro_use]
 mod util;
+mod draw;
 mod font;
 
+use draw::Display;
 use font::{NORMAL, LARGE, CONSOLE, GRAY, WHITE, RED, GREEN, ALARM};
 
 /// Width and height of visible screen.
@@ -79,7 +81,7 @@ static CURSORBUF: [u8; CHARW as usize] = [CURSOR_COLOR; CHARW as usize];
 static mut RXBUF: Option<ArrayDeque<[u8; 256]>> = None;
 
 // Publicity
-const MLZLOGO: &[u8] = include_bytes!("logo_mlz.raw");
+const MLZLOGO: &[u8] = include_bytes!("logo_mlz.dat");
 const MLZLOGO_SIZE: (u16, u16) = (240, 84);
 const MLZ_COLOR: u8 = 60;
 
@@ -94,8 +96,6 @@ const ARROW_UP: &[u8] = &[
     0b11111111, 0b11111111
 ];
 const ARROW_SIZE: (u16, u16) = (16, 8);
-
-mod lorem;
 
 fn fifo() -> &'static mut ArrayDeque<[u8; 256]> {
     unsafe { RXBUF.get_or_insert_with(ArrayDeque::new) }
@@ -128,14 +128,7 @@ fn main() -> ! {
     let mut gpiod = peri.GPIOD.split(&mut rcc.ahb1);
     let mut gpioe = peri.GPIOE.split(&mut rcc.ahb1);
 
-    // LEDs
-    let mut led1 = gpiob.pb7.into_push_pull_output(&mut gpiob.moder, &mut gpiob.otyper);
-    let mut led2 = gpiob.pb14.into_push_pull_output(&mut gpiob.moder, &mut gpiob.otyper);
-
-    led1.set_low();
-    led2.set_high();
-
-    // LCD_enable
+    // LCD enable: set it low first to avoid LCD bleed while setting up timings
     let mut disp_on = gpioa.pa8.into_push_pull_output(&mut gpioa.moder, &mut gpioa.otyper);
     disp_on.set_low();
 
@@ -287,98 +280,71 @@ fn main() -> ! {
     nvic.enable(stm::Interrupt::TIM3);
     nvic.enable(stm::Interrupt::USART3);
 
-    // indicate readiness
-    led1.set_high();
-    led2.set_low();
+    let mut display = Display { buf: unsafe { &mut FRAMEBUF }, width: WIDTH, height: HEIGHT };
 
-    clear_screen(255);
+    display.clear(255);
 
     let off_x = (WIDTH - MLZLOGO_SIZE.0) / 2;
     let off_y = (HEIGHT - MLZLOGO_SIZE.1) / 2;
-    draw_image(off_x, off_y, MLZLOGO, MLZLOGO_SIZE, MLZ_COLOR);
+    display.image(off_x, off_y, MLZLOGO, MLZLOGO_SIZE, MLZ_COLOR);
 
-    for _ in 0..500 {
-        delay.delay_ms(10u32);
+    delay.delay(5000);
+
+    display.clear(0);
+
+    loop {
+        display.rect(20, 40, 460, 90, 1);
+        display.text(&LARGE, 30, 50, b"SELF DESTRUCT ENGAGED", &ALARM);
+        delay.delay(500);
+        display.rect(20, 40, 460, 90, 0);
+        delay.delay(500);
     }
 
-    clear_screen(0);
-
-    let mut cx = 0;
-    let mut cy = 0;
-    for line in lorem::BOOTUP {
-        for &chr in *line {
-            CONSOLE.draw(cx * CHARW, cy * CHARH, &[chr], &GRAY);
-            cx = (cx + 1) % COLS;
-        }
-        cx = 0;
-        cy += 1;
-        if cy == ROWS {
-            // scroll one row using DMA
-            modif!(DMA2D.cr: mode = 0, start = true);
-            wait_for!(DMA2D.cr: start);
-            cy -= 1;
-        }
-        delay.delay_ms(20u32);
-    }
-
-    for _ in 0..500 {
-        delay.delay_ms(10u32);
-    }
-
-    clear_screen(0);
-
-    let mut marq_off = 0;
+    let marq_off = 0;
     let marq_len = 58;
     const MARQUEE: &[u8] = b"compressor off, cooling water temperature alarm, \
                              cold head has spontaneously combusted --- ";
 
-    for j in 0..10000 {
-        for &(n1, n2, over) in lorem::DISPLAY {
-            NORMAL.draw(21*8, 0, b"ccr12.kompass.frm2", &GRAY);
-            draw_line(0, 15, WIDTH-1, 15, 255);
-            draw_line(240, 15, 240, HEIGHT-17, 255);
-            draw_line(0, HEIGHT-17, WIDTH-1, HEIGHT-17, 255);
+    // for j in 0..10000 {
+    //     for &(n1, n2, over) in lorem::DISPLAY {
+    let over = true;
+    display.text(&NORMAL, 21*8, 0, b"ccr12.kompass.frm2", &GRAY);
+    display.line(0, 15, WIDTH-1, 15, 255);
+    display.line(240, 15, 240, HEIGHT-17, 255);
+    display.line(0, HEIGHT-17, WIDTH-1, HEIGHT-17, 255);
 
-            NORMAL.draw(10,  45, b"T1", &GRAY);
-            NORMAL.draw(175, 45, b"K", &GRAY);
-            LARGE.draw(40, 27, n1, &GREEN);
+    display.text(&NORMAL, 10,  44, b"T1", &GRAY);
+    display.text(&NORMAL, 175, 44, b"K", &GRAY);
+    display.text(&LARGE, 40, 27, b"50.123", &GREEN);
 
-            NORMAL.draw(10,  87, b"T2", &GRAY);
-            NORMAL.draw(175, 87, b"K", &GRAY);
-            LARGE.draw(40, 69, n2, if over { &RED } else { &GREEN });
-            draw_image( 210, 87, ARROW_UP, ARROW_SIZE, if over { 196 } else { 0 });
+    display.text(&NORMAL, 10,  86, b"T2", &GRAY);
+    display.text(&NORMAL, 175, 86, b"K", &GRAY);
+    display.text(&LARGE, 40, 69, b"40.872", if over { &RED } else { &GREEN });
+    display.image(210, 87, ARROW_UP, ARROW_SIZE, if over { 196 } else { 0 });
 
-            LARGE.draw(260, 27, b"0.576e-1", &WHITE);
-            NORMAL.draw(430, 45, b"mbar", &GRAY);
+    display.text(&LARGE, 260, 27, b"0.576e-1", &WHITE);
+    display.text(&NORMAL, 430, 44, b"mbar", &GRAY);
 
-            LARGE.draw(260, 69, b"--.---", &WHITE);
-            NORMAL.draw(430, 87, b"mbar", &GRAY);
+    display.text(&LARGE, 260, 69, b"--.---", &WHITE);
+    display.text(&NORMAL, 430, 86, b"mbar", &GRAY);
 
-            if j > 2 {
-                NORMAL.draw(0, 112, b" ", &ALARM);
-                if MARQUEE.len() <= marq_len {
-                    NORMAL.draw(8, 112, MARQUEE, &ALARM);
-                } else if marq_off + marq_len <= MARQUEE.len() {
-                    NORMAL.draw(8, 112, &MARQUEE[marq_off..marq_off+marq_len], &ALARM);
-                } else {
-                    let remain = MARQUEE.len() - marq_off;
-                    NORMAL.draw(8, 112, &MARQUEE[marq_off..], &ALARM);
-                    NORMAL.draw(8 * (1 + remain as u16), 112, &MARQUEE[..marq_len - remain], &ALARM);
-                }
-                NORMAL.draw(472, 112, b" ", &ALARM);
-
-                marq_off = (marq_off + 1) % MARQUEE.len();
-            }
-
-            for _ in 0..50 {
-                delay.delay_ms(10u32);
-            }
-        }
+    display.text(&NORMAL, 0, 112, b" ", &ALARM);
+    if MARQUEE.len() <= marq_len {
+        display.text(&NORMAL, 8, 112, MARQUEE, &ALARM);
+    } else if marq_off + marq_len <= MARQUEE.len() {
+        display.text(&NORMAL, 8, 112, &MARQUEE[marq_off..marq_off+marq_len], &ALARM);
+    } else {
+        let remain = MARQUEE.len() - marq_off;
+        display.text(&NORMAL, 8, 112, &MARQUEE[marq_off..], &ALARM);
+        display.text(&NORMAL, 8 * (1 + remain as u16), 112, &MARQUEE[..marq_len - remain], &ALARM);
     }
+    display.text(&NORMAL, 472, 112, b" ", &ALARM);
 
-    clear_screen(0);
+    delay.delay(50000);
+
+    display.clear(0);
     timer.listen(hal::timer::Event::TimeOut);
-    main_loop(console_tx)
+    main_loop(display, console_tx)
 }
 
 fn cursor(cx: u16, cy: u16) {
@@ -390,40 +356,8 @@ fn cursor(cx: u16, cy: u16) {
     write!(LTDC.srcr: vbr = true);
 }
 
-#[inline(always)]
-fn set_pixel(x: u16, y: u16, color: u8) {
-    unsafe {
-        FRAMEBUF[x as usize + (y * WIDTH) as usize] = color;
-    }
-}
-
-fn clear_screen(color: u8) {
-    // TODO: use DMA?
-    for x in 0..WIDTH {
-        for y in 0..HEIGHT {
-            set_pixel(x, y, color);
-        }
-    }
-}
-
-fn draw_image(px: u16, py: u16, img: &[u8], size: (u16, u16), color: u8) {
-    for x in 0..size.0 {
-        for y in 0..size.1 {
-            let byte = img[(x + y*size.0) as usize / 8];
-            if byte & (1 << (x % 8)) != 0 {
-                set_pixel(px + x, py + y, color);
-            }
-        }
-    }
-}
-
-fn draw_line(x1: u16, y1: u16, x2: u16, y2: u16, color: u8) {
-    for (x, y) in bresenham::Bresenham::new((x1 as isize, y1 as isize), (x2 as isize, y2 as isize)) {
-        set_pixel(x as u16, y as u16, color);
-    }
-}
-
-fn process_escape(end: u8, seq: &[u8], cx: &mut u16, cy: &mut u16, color: &mut u8, bkgrd: &mut u8) {
+fn process_escape(display: &mut Display, end: u8, seq: &[u8], cx: &mut u16, cy: &mut u16,
+                  color: &mut u8, bkgrd: &mut u8) {
     let mut args = seq.split(|&v| v == b';').map(|n| btoi(n).unwrap_or(0));
     match end {
         b'm' => while let Some(arg) = args.next() {
@@ -466,7 +400,7 @@ fn process_escape(end: u8, seq: &[u8], cx: &mut u16, cy: &mut u16, color: &mut u
         }
         b'J' => {
             // TODO: process arguments
-            clear_screen(0);
+            display.clear(0);
             *cx = 0;
             *cy = 0;
         },
@@ -476,7 +410,7 @@ fn process_escape(end: u8, seq: &[u8], cx: &mut u16, cy: &mut u16, color: &mut u
     }
 }
 
-fn main_loop(mut console_tx: hal::serial::Tx<stm::USART3>) -> ! {
+fn main_loop(mut display: Display, mut console_tx: hal::serial::Tx<stm::USART3>) -> ! {
     let mut cx = 0;
     let mut cy = 0;
     let mut color = DEFAULT_COLOR;
@@ -501,7 +435,7 @@ fn main_loop(mut console_tx: hal::serial::Tx<stm::USART3>) -> ! {
                         escape = 0;
                     }
                 } else {
-                    process_escape(ch, &escape_seq[..escape_len],
+                    process_escape(&mut display, ch, &escape_seq[..escape_len],
                                    &mut cx, &mut cy, &mut color, &mut bkgrd);
                     cursor(cx, cy);
                     escape = 0;
@@ -524,16 +458,28 @@ fn main_loop(mut console_tx: hal::serial::Tx<stm::USART3>) -> ! {
             } else if ch == b'\x08' {
                 if cx > 0 {
                     cx -= 1;
-                    CONSOLE.draw(cx * CHARW, cy * CHARH, b" ", &[bkgrd, 0, 0, color]);
+                    display.text(&CONSOLE, cx * CHARW, cy * CHARH, b" ", &[bkgrd, 0, 0, color]);
                     cursor(cx, cy);
                 }
             } else if ch == b'\x1b' {
                 escape = 1;
             } else {
-                CONSOLE.draw(cx * CHARW, cy * CHARH, &[ch], &[bkgrd, 0, 0, color]);
+                display.text(&CONSOLE, cx * CHARW, cy * CHARH, &[ch], &[bkgrd, 0, 0, color]);
                 cx = (cx + 1) % COLS;
                 cursor(cx, cy);
             }
+        }
+    }
+}
+
+trait DelayExt {
+    fn delay(&mut self, ms: u32);
+}
+
+impl DelayExt for Delay {
+    fn delay(&mut self, ms: u32) {
+        for _ in 0..ms/10 {
+            self.delay_ms(10u32);
         }
     }
 }
