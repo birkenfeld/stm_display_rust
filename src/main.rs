@@ -1,4 +1,3 @@
-#![feature(const_slice_len)]
 #![no_main]
 #![no_std]
 
@@ -185,14 +184,6 @@ fn main() -> ! {
 
     // Basic ChromArt configuration
     write!(DMA2D.fgpfccr: cm = 0b0101);  // L8 in/out
-    write!(DMA2D.opfccr:  cm = 0b0101);
-
-    // for scrolling up one line
-    write!(DMA2D.fgmar: ma = FRAMEBUF.as_ptr().offset(CHARH as isize*WIDTH as isize) as u32);
-    write!(DMA2D.fgor: lo = 0);
-    write!(DMA2D.omar: ma = FRAMEBUF.as_ptr() as u32);
-    write!(DMA2D.oor: lo = 0);
-    write!(DMA2D.nlr: pl = WIDTH, nl = HEIGHT);
 
     // Configure LCD timings
     write!(LTDC.sscr: hsw = H_SYNCPULSE - 1, vsh = V_SYNCPULSE - 1); // -1 required by STM
@@ -449,9 +440,7 @@ fn main_loop(mut display: Display, mut console_tx: hal::serial::Tx<stm::USART3>)
                 cx = 0;
                 cy += 1;
                 if cy == ROWS {
-                    // scroll one row using DMA
-                    modif!(DMA2D.cr: mode = 0, start = true);
-                    wait_for!(DMA2D.cr: start);
+                    display.scroll_up(CHARH);
                     cy -= 1;
                 }
                 cursor(cx, cy);
