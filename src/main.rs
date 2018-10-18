@@ -131,16 +131,20 @@ fn main() -> ! {
     let mut disp_on = gpioa.pa8.into_push_pull_output(&mut gpioa.moder, &mut gpioa.otyper);
     disp_on.set_low();
 
+    // LCD backlight enable
+    let mut backlight = gpiod.pd12.into_push_pull_output(&mut gpiod.moder, &mut gpiod.otyper);
+    backlight.set_high();
+
     // set up blinking timer
     let mut timer = Timer::tim3(peri.TIM3, Hertz(4), clocks, &mut rcc.apb1);
 
-    // Console UART (UART #3)
-    let utx = gpiod.pd8 .into_af7(&mut gpiod.moder, &mut gpiod.afrh);
-    let urx = gpiod.pd9 .into_af7(&mut gpiod.moder, &mut gpiod.afrh);
-    let rts = gpiod.pd12.into_af7(&mut gpiod.moder, &mut gpiod.afrh);
-    let mut console_uart = hal::serial::Serial::usart3(peri.USART3, (utx, urx),
-        hal::time::Bps(115200), clocks, &mut rcc.apb1);
-    console_uart.set_rts(rts);
+    // Console UART (USART #1)
+    let utx = gpioa.pa9 .into_af7(&mut gpioa.moder, &mut gpioa.afrh);
+    let urx = gpioa.pa10 .into_af7(&mut gpioa.moder, &mut gpioa.afrh);
+    //let rts = gpiod.pd12.into_af7(&mut gpiod.moder, &mut gpiod.afrh);
+    let mut console_uart = hal::serial::Serial::usart1(peri.USART1, (utx, urx),
+        hal::time::Bps(115200), clocks, &mut rcc.apb2);
+    //console_uart.set_rts(rts);
     console_uart.listen(hal::serial::Event::Rxne);
     let (console_tx, _) = console_uart.split();
 
@@ -269,7 +273,7 @@ fn main() -> ! {
     // enable interrupts
     let mut nvic = pcore.NVIC;
     nvic.enable(stm::Interrupt::TIM3);
-    nvic.enable(stm::Interrupt::USART3);
+    nvic.enable(stm::Interrupt::USART1);
 
     let mut display = Display { buf: unsafe { &mut FRAMEBUF }, width: WIDTH, height: HEIGHT };
 
@@ -283,7 +287,8 @@ fn main() -> ! {
 
     display.clear(0);
 
-    loop {
+    //loop {
+    for j in 0..5 {
         display.rect(20, 40, 460, 90, 1);
         display.text(&LARGE, 30, 50, b"SELF DESTRUCT ENGAGED", &ALARM);
         delay.delay(500);
@@ -331,7 +336,7 @@ fn main() -> ! {
     }
     display.text(&NORMAL, 472, 112, b" ", &ALARM);
 
-    delay.delay(50000);
+    delay.delay(1000);
 
     display.clear(0);
     timer.listen(hal::timer::Event::TimeOut);
@@ -401,7 +406,7 @@ fn process_escape(display: &mut Display, end: u8, seq: &[u8], cx: &mut u16, cy: 
     }
 }
 
-fn main_loop(mut display: Display, mut console_tx: hal::serial::Tx<stm::USART3>) -> ! {
+fn main_loop(mut display: Display, mut console_tx: hal::serial::Tx<stm::USART1>) -> ! {
     let mut cx = 0;
     let mut cy = 0;
     let mut color = DEFAULT_COLOR;
@@ -485,10 +490,10 @@ fn blink(visible: &mut bool) {
     modif!(TIM3.cr1: cen = true);
 }
 
-interrupt!(USART3, receive);
+interrupt!(USART1, receive);
 
 fn receive() {
-    let data = read!(USART3.dr: dr) as u8;
+    let data = read!(USART1.dr: dr) as u8;
     let _ = fifo().push_back(data);
 }
 
