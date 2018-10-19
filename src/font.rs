@@ -18,7 +18,7 @@ pub struct Font {
 pub const LARGE: Font = Font {
     data:  include_bytes!("font_large.dat"),
     charw: 20,
-    charh: 30,
+    charh: 40,
     n:     128,
 };
 
