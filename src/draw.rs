@@ -57,6 +57,9 @@ impl Display {
 
     pub fn rect(&mut self, x1: u16, y1: u16, x2: u16, y2: u16, color: u8) {
         let nx = x2 - x1;
+        if !(x1 < x2 && x2 < self.width) || !(y1 < y2 && y2 < self.height) {
+            return;
+        }
 
         write!(DMA2D.ocolr: green = color, blue = color);
         write!(DMA2D.opfccr: cm = 0b100); // ARGB4444, transfer 16bits at once
