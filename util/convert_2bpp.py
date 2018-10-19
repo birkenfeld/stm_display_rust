@@ -9,6 +9,6 @@ out = open(outf, 'wb')
 
 for i in range(0, len(data), 4):
     out.write(bytes([
-        (data[i] & 0x3) << 6 | (data[i+1] & 0x3) << 4 |
-        (data[i+2] & 0x3) << 2 | (data[i] & 0x3)
+        (data[i+3] & 0x3) << 6 | (data[i+2] & 0x3) << 4 |
+        (data[i+1] & 0x3) << 2 | (data[i] & 0x3)
     ]))

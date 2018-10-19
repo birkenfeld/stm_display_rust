@@ -72,5 +72,5 @@ for (i, ch) in enumerate(cs):
     b = buf[::4]
     # outf_uc.write(b)
     for i in range(0, wd*ht, 4):
-        a = (b[i]//64) << 6 | (b[i+1]//64) << 4 | (b[i+2]//64) << 2 | (b[i+3]//64)
+        a = (b[i+3]//64) << 6 | (b[i+2]//64) << 4 | (b[i+1]//64) << 2 | (b[i]//64)
         outf.write(bytes([a]))

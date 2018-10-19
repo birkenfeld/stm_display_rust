@@ -10,8 +10,8 @@ pub const ALARM: TextColors = [1, 196, 210, 255];
 
 pub struct Font {
     pub data:  &'static [u8],
-    pub charw: usize,
-    pub charh: usize,
+    pub charw: u16,
+    pub charh: u16,
     pub n:     usize,
 }
 
@@ -35,10 +35,3 @@ pub const CONSOLE: Font = Font {
     charh: 8,
     n:     256,
 };
-
-impl Font {
-    #[inline(always)]
-    pub const fn perline(&self) -> usize {
-        (self.charw + 3) / 4
-    }
-}

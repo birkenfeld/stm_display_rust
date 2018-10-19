@@ -13,33 +13,31 @@ pub struct Display {
 impl Display {
     #[inline(always)]
     fn set_pixel(&mut self, x: u16, y: u16, color: u8) {
-        self.buf[x as usize + (y * self.width) as usize] = color;
+        // TODO: transparency?
+        if x < self.width && y < self.height {
+            self.buf[x as usize + (y * self.width) as usize] = color;
+        }
     }
 
     pub fn text(&mut self, font: &Font, mut px: u16, py: u16, text: &[u8], colors: &TextColors) {
         for &chr in text {
-            let mut off = (chr as usize % font.n) * font.charh * font.perline();
-            for y in 0..font.charh {
-                for x in 0..font.charw {
-                    // each pixel is encoded in 2 bit
-                    let idx = off + (x >> 2);         // byte index is x/4
-                    let shift = (3 - (x & 3)) << 1;   // bit shift is 2*(x%4)
-                    let color = (font.data[idx] >> shift) & 3;
-                    self.set_pixel(px + x as u16, py + y as u16, colors[color as usize]);
-                }
-                off += font.perline();
-            }
+            let off = ((chr as usize % font.n) * (font.charh * font.charw) as usize + 3) / 4;
+            self.image(px, py, &font.data[off..], (font.charw, font.charh), colors);
             px += font.charw as u16;
         }
     }
 
-    pub fn image(&mut self, px: u16, py: u16, img: &[u8], size: (u16, u16), color: u8) {
-        for x in 0..size.0 {
-            for y in 0..size.1 {
-                let byte = img[(x + y*size.0) as usize / 8];
-                if byte & (1 << (x % 8)) != 0 {
-                    self.set_pixel(px + x, py + y, color);
+    pub fn image(&mut self, px: u16, py: u16, img: &[u8], size: (u16, u16), colors: &TextColors) {
+        let mut bits = 0x1;
+        let mut off = 0;
+        for y in 0..size.1 {
+            for x in 0..size.0 {
+                if bits == 0x1 {
+                    bits = img[off] as u16 | 0x100;
+                    off += 1;
                 }
+                self.set_pixel(px + x, py + y, colors[(bits & 0b11) as usize]);
+                bits >>= 2;
             }
         }
     }

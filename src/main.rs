@@ -81,20 +81,20 @@ static mut RXBUF: Option<ArrayDeque<[u8; 256]>> = None;
 
 // Publicity
 const MLZLOGO: &[u8] = include_bytes!("logo_mlz.dat");
-const MLZLOGO_SIZE: (u16, u16) = (240, 84);
-const MLZ_COLOR: u8 = 60;
+const MLZLOGO_SIZE: (u16, u16) = (240, 88);
+const MLZ_COLORS: [u8; 4] = [60, 104, 188, 255];
 
-const ARROW_UP: &[u8] = &[
-    0b10000000, 0b00000001,
-    0b11000000, 0b00000011,
-    0b11100000, 0b00000111,
-    0b11110000, 0b00001111,
-    0b11111000, 0b00011111,
-    0b11111100, 0b00111111,
-    0b11111110, 0b01111111,
-    0b11111111, 0b11111111
-];
-const ARROW_SIZE: (u16, u16) = (16, 8);
+// const ARROW_UP: &[u8] = &[
+//     0b10000000, 0b00000001,
+//     0b11000000, 0b00000011,
+//     0b11100000, 0b00000111,
+//     0b11110000, 0b00001111,
+//     0b11111000, 0b00011111,
+//     0b11111100, 0b00111111,
+//     0b11111110, 0b01111111,
+//     0b11111111, 0b11111111
+// ];
+// const ARROW_SIZE: (u16, u16) = (16, 8);
 
 fn fifo() -> &'static mut ArrayDeque<[u8; 256]> {
     unsafe { RXBUF.get_or_insert_with(ArrayDeque::new) }
@@ -103,6 +103,10 @@ fn fifo() -> &'static mut ArrayDeque<[u8; 256]> {
 
 #[entry]
 fn main() -> ! {
+    inner_main()
+}
+
+fn inner_main() -> ! {
     // let mut stdout = hio::hstdout().unwrap();
     let pcore = arm::Peripherals::take().unwrap();
     let peri = stm::Peripherals::take().unwrap();
@@ -281,14 +285,13 @@ fn main() -> ! {
 
     let off_x = (WIDTH - MLZLOGO_SIZE.0) / 2;
     let off_y = (HEIGHT - MLZLOGO_SIZE.1) / 2;
-    display.image(off_x, off_y, MLZLOGO, MLZLOGO_SIZE, MLZ_COLOR);
+    display.image(off_x, off_y, MLZLOGO, MLZLOGO_SIZE, &MLZ_COLORS);
 
-    delay.delay(5000);
+    delay.delay(50000);
 
     display.clear(0);
 
-    //loop {
-    for j in 0..5 {
+    for _ in 0..10 {
         display.rect(20, 40, 460, 90, 1);
         display.text(&LARGE, 30, 50, b"SELF DESTRUCT ENGAGED", &ALARM);
         delay.delay(500);
@@ -316,7 +319,7 @@ fn main() -> ! {
     display.text(&NORMAL, 10,  86, b"T2", &GRAY);
     display.text(&NORMAL, 175, 86, b"K", &GRAY);
     display.text(&LARGE, 40, 69, b"40.872", if over { &RED } else { &GREEN });
-    display.image(210, 87, ARROW_UP, ARROW_SIZE, if over { 196 } else { 0 });
+    // display.image(210, 87, ARROW_UP, ARROW_SIZE, if over { 196 } else { 0 });
 
     display.text(&LARGE, 260, 27, b"0.576e-1", &WHITE);
     display.text(&NORMAL, 430, 44, b"mbar", &GRAY);
@@ -336,7 +339,7 @@ fn main() -> ! {
     }
     display.text(&NORMAL, 472, 112, b" ", &ALARM);
 
-    delay.delay(1000);
+    delay.delay(20000);
 
     display.clear(0);
     timer.listen(hal::timer::Event::TimeOut);
@@ -359,6 +362,7 @@ fn process_escape(display: &mut Display, end: u8, seq: &[u8], cx: &mut u16, cy: 
         b'm' => while let Some(arg) = args.next() {
             match arg {
                 0  => { *color = DEFAULT_COLOR; *bkgrd = DEFAULT_BKGRD; }
+                // XXX should not get reset by color selection
                 1  => { *color |= 0b1000; } // XXX: only for 16colors
                 22 => { *color &= !0b1000; }
                 30...37 => { *color = arg as u8 - 30; }
