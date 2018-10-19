@@ -97,9 +97,11 @@ s = serial.Serial(sys.argv[1], baudrate=115200)
 
 d = Display(s)
 
+BLACK = [0, 0, 0, 0]
 GRAY = [0, 239, 240, 245]
 WHITE = [0, 239, 247, 255]
 RED = [0, 52, 124, 196]
+BLUE = [0, 0, 0, 27]
 GREEN = [0, 28, 34, 46]
 ALARM = [1, 197, 223, 255]
 
@@ -120,9 +122,11 @@ if sys.argv[2] == '1':
 
     time.sleep(3)
     d.pos_text((120, 103), "Getting network address...".center(30))
-    time.sleep(3)
+    time.sleep(2)
     d.pos_text((120, 103), "Starting SeCOP servers...".center(30))
-    time.sleep(3)
+    time.sleep(2)
+    d.pos_text((120, 103), "Reticulating splines...".center(30))
+    time.sleep(2)
     d.pos_text((120, 103), "Ready!".center(30))
     time.sleep(1)
 
@@ -147,20 +151,32 @@ if sys.argv[2] == '1':
     t2 = 10
     p1 = 0.5
 
+    x = 226
+    yp = 10
+
+    d.set_font(0)
+    d.set_color(WHITE)
+    d.pos_text((205, 18), "200")
+    d.pos_text((205, 101), "  0")
+    d.lines((225, 17), (225, 110))
+    d.set_color(GRAY)
+    d.lines((226, 61), (479, 61))
+
     while 1:
+        time.sleep(0.1)
         d.attr_text(0, "ccr12.kompass.frm2")
         d.attr_text(1, "T1")
         d.attr_text(2, "K")
         d.attr_text(3, "T2")
         d.attr_text(4, "K")
-        d.attr_text(5, "mbar")
-        d.attr_text(6, "mbar")
+        #d.attr_text(5, "mbar")
+        #d.attr_text(6, "mbar")
 
         rnd = random.random()
         t1 += rnd * 0.03
         if t1 > 230:
             t1 -= 50
-        t2 += (rnd - 0.5) * 0.01
+        t2 += (rnd - 0.5) * 0.05
 
         if t1 >= 100:
             d.attr_text(7, "%6.2f" % t1)
@@ -168,14 +184,28 @@ if sys.argv[2] == '1':
             d.attr_text(7, "%6.3f" % t1)
         d.attr_text(8, "%6.3f" % t2)
 
-        d.attr_text(9, "%.3f" % (p1 + 0.1*(rnd - 0.5)))
-        d.attr_text(10, "-1")
-        d.attr_text(11, "x10")
-        d.attr_text(12, "-.---")
+        #d.attr_text(9, "%.3f" % (p1 + 0.1*(rnd - 0.5)))
+        #d.attr_text(10, "-1")
+        #d.attr_text(11, "x10")
+        #d.attr_text(12, "-.---")
 
         if time.time() - t > 0.5:
             marq_off = (marq_off + 1) % marq_len
             t = time.time()
+
+            x += 1
+            if x >= 480:
+                x = 226
+                d.set_color(BLACK)
+                d.rect((226, 16), (480, 110))
+                d.set_color(GRAY)
+                d.lines((226, 61), (479, 61))
+            else:
+                d.set_color(BLUE)
+                y = int(61 - (t2-10)*50)
+                d.lines((x-1, yp), (x, y))
+                yp = y
+
         if marq_off + 60 <= marq_len:
             d.attr_text(13, MARQUEE[marq_off:marq_off+60])
         else:
@@ -184,7 +214,7 @@ if sys.argv[2] == '1':
 
         d.set_color(WHITE)
         d.lines((0, 16), (479, 16))
-        d.lines((220, 16), (220, 111))
+        d.lines((200, 16), (200, 111))
         d.lines((0, 111), (479, 111))
 
 else:
