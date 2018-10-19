@@ -35,3 +35,5 @@ pub const CONSOLE: Font = Font {
     charh: 8,
     n:     256,
 };
+
+pub const FONTS: &[&Font] = &[&CONSOLE, &NORMAL, &LARGE];

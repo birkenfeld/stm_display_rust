@@ -1,13 +1,14 @@
 //! Basic display abstraction and drawing routines.
 
 use bresenham::Bresenham;
-use font::{Font, TextColors};
+use font::{FONTS, Font, TextColors};
 use stm;
 
 pub struct Display {
     pub buf: &'static mut [u8],
     pub width: u16,
     pub height: u16,
+    pub has_cursor: bool,
 }
 
 impl Display {
@@ -82,5 +83,128 @@ impl Display {
         write!(DMA2D.nlr: pl = self.width, nl = self.height);
         modif!(DMA2D.cr: mode = 0, start = true);
         wait_for!(DMA2D.cr: !start);
+    }
+
+    pub fn activate(&self) {
+        // Color frame buffer start address
+        write!(LTDC.l1cfbar: cfbadd = self.buf.as_ptr() as u32);
+        // reload on next vsync
+        write!(LTDC.srcr: vbr = true);
+        ::enable_cursor(self.has_cursor);
+    }
+}
+
+#[derive(Default)]
+pub struct Graphics {
+    pub cur: GraphicsSetting,
+    pub saved: [GraphicsSetting; 16],
+}
+
+#[derive(Default, Clone, Copy)]
+pub struct GraphicsSetting {
+    pub posx:  u16,
+    pub posy:  u16,
+    pub font:  u8,
+    pub color: [u8; 4],
+}
+
+const CMD_MODE_GRAPHICS: u8 = 0x20;
+const CMD_MODE_CONSOLE:  u8 = 0x21;
+
+const CMD_SET_POS:       u8 = 0x30;
+const CMD_SET_FONT:      u8 = 0x31;
+const CMD_SET_COLOR:     u8 = 0x32;
+
+const CMD_SAVE_ATTRS:    u8 = 0x40;
+const CMD_SAVE_ATTRS_MAX:u8 = 0x4f;
+
+const CMD_SEL_ATTRS:     u8 = 0x50;
+const CMD_SEL_ATTRS_MAX: u8 = 0x5f;
+
+const CMD_TEXT:          u8 = 0x60;
+const CMD_LINES:         u8 = 0x61;
+const CMD_RECT:          u8 = 0x62;
+const CMD_ICON:          u8 = 0x63;
+const CMD_CLEAR:         u8 = 0x64;
+
+fn pos_from_bytes(pos: &[u8]) -> (u16, u16) {
+    ((((pos[0] & 1) as u16) << 8) | (pos[1] as u16),
+     (pos[0] >> 1) as u16)
+}
+
+// Publicity
+const MLZLOGO: &[u8] = include_bytes!("logo_mlz.dat");
+const MLZLOGO_SIZE: (u16, u16) = (240, 88);
+const MLZ_COLORS: [u8; 4] = [60, 104, 188, 255];
+
+// const ARROW_UP: &[u8] = &[
+//     0b10000000, 0b00000001,
+//     0b11000000, 0b00000011,
+//     0b11100000, 0b00000111,
+//     0b11110000, 0b00001111,
+//     0b11111000, 0b00011111,
+//     0b11111100, 0b00111111,
+//     0b11111110, 0b01111111,
+//     0b11111111, 0b11111111
+// ];
+// const ARROW_SIZE: (u16, u16) = (16, 8);
+
+const ICONS: &[(&[u8], (u16, u16))] = &[
+    (MLZLOGO, MLZLOGO_SIZE),
+];
+
+impl Graphics {
+    pub fn process(&mut self, display: &mut Display, console: &Display, seq: &[u8]) {
+        let data_len = seq.len() - 2;
+        match seq[1] {
+            CMD_MODE_GRAPHICS => display.activate(),
+            CMD_MODE_CONSOLE  => console.activate(),
+            CMD_SET_POS => if data_len >= 2 {
+                let (x, y) = pos_from_bytes(&seq[2..]);
+                self.cur.posx = x;
+                self.cur.posy = y;
+            },
+            CMD_SET_FONT => if data_len >= 1 {
+                if seq[2] < FONTS.len() as u8 {
+                    self.cur.font = seq[2];
+                }
+            },
+            CMD_SET_COLOR => if data_len >= 4 {
+                self.cur.color.copy_from_slice(&seq[2..6]);
+            }
+            CMD_TEXT => {
+                display.text(FONTS[self.cur.font as usize], self.cur.posx,
+                             self.cur.posy, &seq[2..], &self.cur.color);
+            }
+            CMD_LINES => if data_len >= 4 && data_len % 2 == 0 {
+                let mut pos1 = pos_from_bytes(&seq[2..]);
+                for i in 1..data_len/2 {
+                    let pos2 = pos_from_bytes(&seq[2+2*i..]);
+                    display.line(pos1.0, pos1.1, pos2.0, pos2.1, self.cur.color[3]);
+                    pos1 = pos2;
+                }
+            }
+            CMD_RECT => if data_len >= 4 {
+                let pos1 = pos_from_bytes(&seq[2..]);
+                let pos2 = pos_from_bytes(&seq[4..]);
+                display.rect(pos1.0, pos1.1, pos2.0, pos2.1, self.cur.color[3]);
+            }
+            CMD_ICON => if data_len >= 1 {
+                if seq[2] < ICONS.len() as u8 {
+                    let (data, size) = ICONS[seq[2] as usize];
+                    display.image(self.cur.posx, self.cur.posy, data, size, &self.cur.color);
+                }
+            }
+            CMD_CLEAR => if data_len >= 1 {
+                display.clear(seq[2]);
+            }
+            CMD_SEL_ATTRS ..= CMD_SEL_ATTRS_MAX => {
+                self.cur = self.saved[(seq[1] - CMD_SEL_ATTRS) as usize];
+            }
+            CMD_SAVE_ATTRS ..= CMD_SAVE_ATTRS_MAX => {
+                self.saved[(seq[1] - CMD_SAVE_ATTRS) as usize] = self.cur;
+            }
+            _ => {}
+        }
     }
 }

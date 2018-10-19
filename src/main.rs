@@ -3,6 +3,7 @@
 
 #[macro_use]
 extern crate cortex_m_rt as rt;
+extern crate cortex_m as arm;
 extern crate cortex_m_semihosting as sh;
 extern crate panic_semihosting;
 #[macro_use]
@@ -11,7 +12,6 @@ extern crate btoi;
 extern crate arraydeque;
 extern crate bresenham;
 extern crate embedded_hal as hal_base;
-extern crate cortex_m as arm;
 #[macro_use]
 extern crate stm32f429 as stm;
 extern crate stm32f429_hal as hal;
@@ -20,12 +20,13 @@ use rt::ExceptionFrame;
 use btoi::btoi;
 use arraydeque::ArrayDeque;
 use hal::time::*;
-use hal::timer::Timer;
+use hal::timer::{Timer, Event};
 use hal::delay::Delay;
 use hal::rcc::RccExt;
 use hal::gpio::GpioExt;
 use hal::flash::FlashExt;
 use hal_base::prelude::*;
+use core::sync::atomic::{AtomicBool, Ordering, ATOMIC_BOOL_INIT};
 
 #[macro_use]
 mod util;
@@ -73,33 +74,17 @@ const FB_SIZE: usize = (WIDTH as usize) * ((HEIGHT + CHARH) as usize);
 
 // main framebuffer
 static mut FRAMEBUF: [u8; FB_SIZE] = [0; FB_SIZE];
+// secondary framebuffer for console mode
+static mut FRAMEBUF2: [u8; FB_SIZE] = [0; FB_SIZE];
 // cursor framebuffer, just the cursor itself
 static CURSORBUF: [u8; CHARW as usize] = [CURSOR_COLOR; CHARW as usize];
 
 // TX receive buffer
-static mut RXBUF: Option<ArrayDeque<[u8; 256]>> = None;
+static mut RXBUF: Option<ArrayDeque<[u8; 1024]>> = None;
 
-// Publicity
-const MLZLOGO: &[u8] = include_bytes!("logo_mlz.dat");
-const MLZLOGO_SIZE: (u16, u16) = (240, 88);
-const MLZ_COLORS: [u8; 4] = [60, 104, 188, 255];
-
-// const ARROW_UP: &[u8] = &[
-//     0b10000000, 0b00000001,
-//     0b11000000, 0b00000011,
-//     0b11100000, 0b00000111,
-//     0b11110000, 0b00001111,
-//     0b11111000, 0b00011111,
-//     0b11111100, 0b00111111,
-//     0b11111110, 0b01111111,
-//     0b11111111, 0b11111111
-// ];
-// const ARROW_SIZE: (u16, u16) = (16, 8);
-
-fn fifo() -> &'static mut ArrayDeque<[u8; 256]> {
+fn fifo() -> &'static mut ArrayDeque<[u8; 1024]> {
     unsafe { RXBUF.get_or_insert_with(ArrayDeque::new) }
 }
-
 
 #[entry]
 fn main() -> ! {
@@ -144,13 +129,13 @@ fn inner_main() -> ! {
 
     // Console UART (USART #1)
     let utx = gpioa.pa9 .into_af7(&mut gpioa.moder, &mut gpioa.afrh);
-    let urx = gpioa.pa10 .into_af7(&mut gpioa.moder, &mut gpioa.afrh);
+    let urx = gpioa.pa10.into_af7(&mut gpioa.moder, &mut gpioa.afrh);
     //let rts = gpiod.pd12.into_af7(&mut gpiod.moder, &mut gpiod.afrh);
     let mut console_uart = hal::serial::Serial::usart1(peri.USART1, (utx, urx),
         hal::time::Bps(115200), clocks, &mut rcc.apb2);
     //console_uart.set_rts(rts);
     console_uart.listen(hal::serial::Event::Rxne);
-    let (console_tx, _) = console_uart.split();
+    let (mut console_tx, _) = console_uart.split();
 
     // LCD pins
     gpioa.pa3 .into_lcd(&mut gpioa.moder, &mut gpioa.ospeedr, &mut gpioa.afrl, 0xE);
@@ -279,71 +264,101 @@ fn inner_main() -> ! {
     nvic.enable(stm::Interrupt::TIM3);
     nvic.enable(stm::Interrupt::USART1);
 
-    let mut display = Display { buf: unsafe { &mut FRAMEBUF }, width: WIDTH, height: HEIGHT };
+    let mut display = Display { buf: unsafe { &mut FRAMEBUF }, width: WIDTH, height: HEIGHT,
+                                has_cursor: false };
+    let mut console = Display { buf: unsafe { &mut FRAMEBUF2 }, width: WIDTH, height: HEIGHT,
+                                has_cursor: true };
 
     display.clear(255);
+    console.clear(0);
+    console.activate();
+    timer.listen(Event::TimeOut);
 
-    let off_x = (WIDTH - MLZLOGO_SIZE.0) / 2;
-    let off_y = (HEIGHT - MLZLOGO_SIZE.1) / 2;
-    display.image(off_x, off_y, MLZLOGO, MLZLOGO_SIZE, &MLZ_COLORS);
+    let mut cx = 0;
+    let mut cy = 0;
+    let mut color = DEFAULT_COLOR;
+    let mut bkgrd = DEFAULT_BKGRD;
+    let mut escape = 0;
+    let mut escape_len = 0;
+    let mut escape_pos = 0;
+    let mut escape_seq = [0u8; 256];
 
-    delay.delay(50000);
+    let mut graphics = draw::Graphics::default();
 
-    display.clear(0);
+    loop {
+        if let Some(ch) = arm::interrupt::free(|_| fifo().pop_front()) {
+            block!(console_tx.write(ch)).unwrap();
 
-    for _ in 0..10 {
-        display.rect(20, 40, 460, 90, 1);
-        display.text(&LARGE, 30, 50, b"SELF DESTRUCT ENGAGED", &ALARM);
-        delay.delay(500);
-        display.rect(20, 40, 460, 90, 0);
-        delay.delay(500);
+            if escape == 1 {
+                escape_len = 0;
+                escape_pos = 0;
+                escape = if ch == b'[' { 2 } else if ch == b'\x1b' { 3 } else { 0 };
+                continue;
+            } else if escape == 2 {
+                if (ch >= b'0' && ch <= b'9') || ch == b';' {
+                    escape_seq[escape_pos] = ch;
+                    escape_pos += 1;
+                    if escape_pos == escape_seq.len() {
+                        escape = 0;
+                    }
+                } else {
+                    process_escape(&mut console, ch, &escape_seq[..escape_pos],
+                                   &mut cx, &mut cy, &mut color, &mut bkgrd);
+                    cursor(cx, cy);
+                    escape = 0;
+                }
+                continue;
+            } else if escape == 3 {
+                if escape_len == 0 {
+                    if ch == 0 {
+                        escape = 0;
+                    } else {
+                        escape_len = ch as usize + 1;
+                    }
+                }
+                escape_seq[escape_pos] = ch;
+                escape_pos += 1;
+                if escape_pos == escape_len {
+                    graphics.process(&mut display, &console, &escape_seq[..escape_pos]);
+                    escape = 0;
+                }
+                continue;
+            }
+
+            if ch == b'\r' {
+                // do nothing
+            } else if ch == b'\n' {
+                cx = 0;
+                cy += 1;
+                if cy == ROWS {
+                    console.scroll_up(CHARH);
+                    cy -= 1;
+                }
+                cursor(cx, cy);
+            } else if ch == b'\x08' {
+                if cx > 0 {
+                    cx -= 1;
+                    console.text(&CONSOLE, cx * CHARW, cy * CHARH, b" ", &[bkgrd, 0, 0, color]);
+                    cursor(cx, cy);
+                }
+            } else if ch == b'\x1b' {
+                escape = 1;
+            } else {
+                console.text(&CONSOLE, cx * CHARW, cy * CHARH, &[ch], &[bkgrd, 0, 0, color]);
+                cx += 1;
+                if cx >= COLS {
+                    // XXX duplication above
+                    cx = 0;
+                    cy += 1;
+                    if cy == ROWS {
+                        console.scroll_up(CHARH);
+                        cy -= 1;
+                    }
+                }
+                cursor(cx, cy);
+            }
+        }
     }
-
-    let marq_off = 0;
-    let marq_len = 58;
-    const MARQUEE: &[u8] = b"compressor off, cooling water temperature alarm, \
-                             cold head has spontaneously combusted --- ";
-
-    // for j in 0..10000 {
-    //     for &(n1, n2, over) in lorem::DISPLAY {
-    let over = true;
-    display.text(&NORMAL, 21*8, 0, b"ccr12.kompass.frm2", &GRAY);
-    display.line(0, 15, WIDTH-1, 15, 255);
-    display.line(240, 15, 240, HEIGHT-17, 255);
-    display.line(0, HEIGHT-17, WIDTH-1, HEIGHT-17, 255);
-
-    display.text(&NORMAL, 10,  44, b"T1", &GRAY);
-    display.text(&NORMAL, 175, 44, b"K", &GRAY);
-    display.text(&LARGE, 40, 27, b"50.123", &GREEN);
-
-    display.text(&NORMAL, 10,  86, b"T2", &GRAY);
-    display.text(&NORMAL, 175, 86, b"K", &GRAY);
-    display.text(&LARGE, 40, 69, b"40.872", if over { &RED } else { &GREEN });
-    // display.image(210, 87, ARROW_UP, ARROW_SIZE, if over { 196 } else { 0 });
-
-    display.text(&LARGE, 260, 27, b"0.576e-1", &WHITE);
-    display.text(&NORMAL, 430, 44, b"mbar", &GRAY);
-
-    display.text(&LARGE, 260, 69, b"--.---", &WHITE);
-    display.text(&NORMAL, 430, 86, b"mbar", &GRAY);
-
-    display.text(&NORMAL, 0, 112, b" ", &ALARM);
-    if MARQUEE.len() <= marq_len {
-        display.text(&NORMAL, 8, 112, MARQUEE, &ALARM);
-    } else if marq_off + marq_len <= MARQUEE.len() {
-        display.text(&NORMAL, 8, 112, &MARQUEE[marq_off..marq_off+marq_len], &ALARM);
-    } else {
-        let remain = MARQUEE.len() - marq_off;
-        display.text(&NORMAL, 8, 112, &MARQUEE[marq_off..], &ALARM);
-        display.text(&NORMAL, 8 * (1 + remain as u16), 112, &MARQUEE[..marq_len - remain], &ALARM);
-    }
-    display.text(&NORMAL, 472, 112, b" ", &ALARM);
-
-    delay.delay(20000);
-
-    display.clear(0);
-    timer.listen(hal::timer::Event::TimeOut);
-    main_loop(display, console_tx)
 }
 
 fn cursor(cx: u16, cy: u16) {
@@ -410,66 +425,6 @@ fn process_escape(display: &mut Display, end: u8, seq: &[u8], cx: &mut u16, cy: 
     }
 }
 
-fn main_loop(mut display: Display, mut console_tx: hal::serial::Tx<stm::USART1>) -> ! {
-    let mut cx = 0;
-    let mut cy = 0;
-    let mut color = DEFAULT_COLOR;
-    let mut bkgrd = DEFAULT_BKGRD;
-    let mut escape = 0;
-    let mut escape_len = 0;
-    let mut escape_seq = [0u8; 36];
-
-    loop {
-        if let Some(ch) = fifo().pop_front() {
-            block!(console_tx.write(ch)).unwrap();
-
-            if escape == 1 {
-                escape_len = 0;
-                escape = if ch == b'[' { 2 } else { 0 };
-                continue;
-            } else if escape == 2 {
-                if (ch >= b'0' && ch <= b'9') || ch == b';' {
-                    escape_seq[escape_len] = ch;
-                    escape_len += 1;
-                    if escape_len == escape_seq.len() {
-                        escape = 0;
-                    }
-                } else {
-                    process_escape(&mut display, ch, &escape_seq[..escape_len],
-                                   &mut cx, &mut cy, &mut color, &mut bkgrd);
-                    cursor(cx, cy);
-                    escape = 0;
-                }
-                continue;
-            }
-
-            if ch == b'\r' {
-                // do nothing
-            } else if ch == b'\n' {
-                cx = 0;
-                cy += 1;
-                if cy == ROWS {
-                    display.scroll_up(CHARH);
-                    cy -= 1;
-                }
-                cursor(cx, cy);
-            } else if ch == b'\x08' {
-                if cx > 0 {
-                    cx -= 1;
-                    display.text(&CONSOLE, cx * CHARW, cy * CHARH, b" ", &[bkgrd, 0, 0, color]);
-                    cursor(cx, cy);
-                }
-            } else if ch == b'\x1b' {
-                escape = 1;
-            } else {
-                display.text(&CONSOLE, cx * CHARW, cy * CHARH, &[ch], &[bkgrd, 0, 0, color]);
-                cx = (cx + 1) % COLS;
-                cursor(cx, cy);
-            }
-        }
-    }
-}
-
 trait DelayExt {
     fn delay(&mut self, ms: u32);
 }
@@ -484,10 +439,16 @@ impl DelayExt for Delay {
 
 interrupt!(TIM3, blink, state: bool = false);
 
+static CURSOR_ENABLED: AtomicBool = ATOMIC_BOOL_INIT;
+
+pub fn enable_cursor(en: bool) {
+    CURSOR_ENABLED.store(en, Ordering::Relaxed);
+}
+
 fn blink(visible: &mut bool) {
     // toggle layer2 on next vsync
     *visible = !*visible;
-    modif!(LTDC.l2cr: len = bit(*visible));
+    modif!(LTDC.l2cr: len = bit(CURSOR_ENABLED.load(Ordering::Relaxed) && *visible));
     write!(LTDC.srcr: vbr = true);
     // reset timer
     modif!(TIM3.sr: uif = false);
