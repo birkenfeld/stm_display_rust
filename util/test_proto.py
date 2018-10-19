@@ -93,15 +93,15 @@ class Display:
         self.send(CMD_ICON, bytes([i]))
 
 
-s = serial.Serial(sys.argv[1], baudrate=230400)
+s = serial.Serial(sys.argv[1], baudrate=115200)
 
 d = Display(s)
 
-GRAY = [0, 235, 240, 245]
+GRAY = [0, 239, 240, 245]
 WHITE = [0, 239, 247, 255]
 RED = [0, 52, 124, 196]
 GREEN = [0, 28, 34, 46]
-ALARM = [1, 196, 210, 255]
+ALARM = [1, 197, 223, 255]
 
 MARQUEE = ("compressor off, cooling water temperature alarm, "
            "cold head has spontaneously combusted --- ")
@@ -126,7 +126,7 @@ if sys.argv[2] == '1':
     d.set_attrs(8, (40, 69), GREEN, 2)   # Wert1
     d.set_attrs(9, (255, 27), WHITE, 2)   # Press
     d.set_attrs(10, (380, 20), WHITE, 2)  # PressExp
-    d.set_attrs(11, (355, 45), WHITE, 1)  # x10
+    d.set_attrs(11, (360, 45), WHITE, 1)  # x10
     d.set_attrs(12, (255, 69), RED, 2)    # --.--
     d.set_attrs(13, (0, 112), ALARM, 1)  # preM
     d.set_attrs(14, (8, 112), ALARM, 1)  # Marquee
@@ -201,9 +201,9 @@ if sys.argv[2] == '1':
         # d.pos_text((472, 112), " ")
         # d.pos_text((8, 112), MARQUEE[:marq_len])
 
-        d.set_pos((240, 22))
-        d.set_color([60, 104, 188, 255])
-        d.icon(0)
+        # d.set_pos((240, 22))
+        # d.set_color([60, 104, 188, 255])
+        # d.icon(0)
     t2 = time.time()
     print('100x = %.2fs' % (t2-t1))
 

@@ -1,5 +1,20 @@
 //! Utility macros/functions.
 
+use hal::delay::Delay;
+use hal_base::prelude::*;
+
+pub trait DelayExt {
+    fn delay(&mut self, ms: u32);
+}
+
+impl DelayExt for Delay {
+    fn delay(&mut self, ms: u32) {
+        for _ in 0..ms/10 {
+            self.delay_ms(10u32);
+        }
+    }
+}
+
 macro_rules! bitset {
     ($e:expr; $p:ident = true, $($tt:tt)+)    => { bitset!($e.$p().set_bit(); $($tt)+) };
     ($e:expr; $p:ident = false, $($tt:tt)+)   => { bitset!($e.$p().clear_bit(); $($tt)+) };

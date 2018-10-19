@@ -17,11 +17,9 @@ extern crate stm32f429 as stm;
 extern crate stm32f429_hal as hal;
 
 use rt::ExceptionFrame;
-use btoi::btoi;
 use arraydeque::ArrayDeque;
 use hal::time::*;
 use hal::timer::{Timer, Event};
-// use hal::delay::Delay;
 use hal::rcc::RccExt;
 use hal::gpio::GpioExt;
 use hal::flash::FlashExt;
@@ -30,11 +28,13 @@ use core::sync::atomic::{AtomicBool, Ordering, ATOMIC_BOOL_INIT};
 
 #[macro_use]
 mod util;
-mod draw;
 mod font;
+mod icon;
+mod console;
+mod graphics;
+mod framebuf;
 
-use draw::Display;
-// use font::{NORMAL, LARGE, CONSOLE, GRAY, WHITE, RED, GREEN, ALARM};
+use framebuf::FrameBuffer;
 
 /// Width and height of visible screen.
 const WIDTH: u16 = 480;
@@ -43,10 +43,6 @@ const HEIGHT: u16 = 128;
 /// Size of a character.
 const CHARW: u16 = font::CONSOLE.charw as u16;
 const CHARH: u16 = font::CONSOLE.charh as u16;
-
-/// Number of characters in the visible screen.
-const COLS: u16 = WIDTH / CHARW;
-const ROWS: u16 = HEIGHT / CHARH;
 
 /// Horizontal display timing.
 const H_SYNCPULSE:  u16 = 11;
@@ -64,22 +60,22 @@ const V_FRONTPORCH: u16 = 8;
 const H_WIN_START:  u16 = H_SYNCPULSE + H_BACKPORCH - 1;
 const V_WIN_START:  u16 = V_SYNCPULSE + V_BACKPORCH - 1;
 
-/// Default colors.
-const DEFAULT_COLOR: u8 = 7;
-const DEFAULT_BKGRD: u8 = 0;
-const CURSOR_COLOR:  u8 = 127;
+// Graphics framebuffer
+const FB_GRAPHICS_SIZE: usize = (WIDTH as usize) * (HEIGHT as usize);
 
-// Size of framebuffer: includes one extra row for scrolling via DMA
-const FB_SIZE: usize = (WIDTH as usize) * ((HEIGHT + CHARH) as usize);
-
-// main framebuffer
 #[link_section = ".bss.sram1"]
-static mut FRAMEBUF: [u8; FB_SIZE] = [0; FB_SIZE];
-// secondary framebuffer for console mode
+static mut FB_GRAPHICS: [u8; FB_GRAPHICS_SIZE] = [0; FB_GRAPHICS_SIZE];
+
+// Console framebuffer
+// Size includes one extra row for scrolling via DMA
+const FB_CONSOLE_SIZE: usize = (WIDTH as usize) * ((HEIGHT + CHARH) as usize);
 #[link_section = ".bss.sram3"]
-static mut FRAMEBUF2: [u8; FB_SIZE] = [0; FB_SIZE];
-// cursor framebuffer, just the cursor itself
+static mut FB_CONSOLE: [u8; FB_CONSOLE_SIZE] = [0; FB_CONSOLE_SIZE];
+
+// Cursor framebuffer: just the cursor itself
+const CURSOR_COLOR: u8 = 127;
 static CURSORBUF: [u8; CHARW as usize] = [CURSOR_COLOR; CHARW as usize];
+static CURSOR_ENABLED: AtomicBool = ATOMIC_BOOL_INIT;
 
 // TX receive buffer
 static mut RXBUF: Option<ArrayDeque<[u8; 1024]>> = None;
@@ -127,7 +123,7 @@ fn inner_main() -> ! {
     backlight.set_high();
 
     // set up blinking timer
-    let mut timer = Timer::tim3(peri.TIM3, Hertz(4), clocks, &mut rcc.apb1);
+    let mut blink_timer = Timer::tim3(peri.TIM3, Hertz(4), clocks, &mut rcc.apb1);
 
     // Console UART (USART #1)
     let utx = gpioa.pa9 .into_af7(&mut gpioa.moder, &mut gpioa.afrh);
@@ -137,7 +133,7 @@ fn inner_main() -> ! {
         hal::time::Bps(115200), clocks, &mut rcc.apb2);
     //console_uart.set_rts(rts);
     console_uart.listen(hal::serial::Event::Rxne);
-    let (mut console_tx, _) = console_uart.split();
+    let (console_tx, _) = console_uart.split();
 
     // LCD pins
     gpioa.pa3 .into_lcd(&mut gpioa.moder, &mut gpioa.ospeedr, &mut gpioa.afrl, 0xE);
@@ -201,7 +197,7 @@ fn inner_main() -> ! {
     // Blending factors
     write!(LTDC.l1bfcr: bf1 = 4, bf2 = 5);  // Constant alpha
     // Color frame buffer start address
-    write!(LTDC.l1cfbar: cfbadd = FRAMEBUF.as_ptr() as u32);
+    write!(LTDC.l1cfbar: cfbadd = FB_CONSOLE.as_ptr() as u32);
     // Color frame buffer line length (active*bpp + 3), and pitch
     write!(LTDC.l1cfblr: cfbll = WIDTH + 3, cfbp = WIDTH);
     // Frame buffer number of lines
@@ -265,27 +261,21 @@ fn inner_main() -> ! {
     let mut nvic = pcore.NVIC;
     nvic.enable(stm::Interrupt::TIM3);
     nvic.enable(stm::Interrupt::USART1);
+    blink_timer.listen(Event::TimeOut);
 
-    let mut display = Display { buf: unsafe { &mut FRAMEBUF }, width: WIDTH, height: HEIGHT,
-                                has_cursor: false };
-    let mut console = Display { buf: unsafe { &mut FRAMEBUF2 }, width: WIDTH, height: HEIGHT,
-                                has_cursor: true };
+    let mut graphics = graphics::Graphics::new(
+        FrameBuffer::new(unsafe { &mut FB_GRAPHICS }, WIDTH, HEIGHT, false)
+    );
+    let mut console = console::Console::new(
+        FrameBuffer::new(unsafe { &mut FB_CONSOLE }, WIDTH, HEIGHT, true),
+        console_tx
+    );
 
-    display.clear(255);
-    console.clear(0);
-    console.activate();
-    timer.listen(Event::TimeOut);
-
-    let mut cx = 0;
-    let mut cy = 0;
-    let mut color = DEFAULT_COLOR;
-    let mut bkgrd = DEFAULT_BKGRD;
+    // main loop: process input
     let mut escape = 0;
     let mut escape_len = 0;
     let mut escape_pos = 0;
     let mut escape_seq = [0u8; 256];
-
-    let mut graphics = draw::Graphics::default();
 
     loop {
         if let Some(ch) = arm::interrupt::free(|_| fifo().pop_front()) {
@@ -302,9 +292,7 @@ fn inner_main() -> ! {
                         escape = 0;
                     }
                 } else {
-                    process_escape(&mut console, ch, &escape_seq[..escape_pos],
-                                   &mut cx, &mut cy, &mut color, &mut bkgrd);
-                    cursor(cx, cy);
+                    console.process_escape(ch, &escape_seq[..escape_pos]);
                     escape = 0;
                 }
                 continue;
@@ -319,131 +307,21 @@ fn inner_main() -> ! {
                 escape_seq[escape_pos] = ch;
                 escape_pos += 1;
                 if escape_pos == escape_len {
-                    graphics.process(&mut display, &console, &escape_seq[..escape_pos]);
+                    graphics.process_command(&console, &escape_seq[..escape_pos]);
                     escape = 0;
                 }
                 continue;
-            }
-
-            block!(console_tx.write(ch)).unwrap();
-
-            if ch == b'\r' {
-                // do nothing
-            } else if ch == b'\n' {
-                cx = 0;
-                cy += 1;
-                if cy == ROWS {
-                    console.scroll_up(CHARH);
-                    cy -= 1;
-                }
-                cursor(cx, cy);
-            } else if ch == b'\x08' {
-                if cx > 0 {
-                    cx -= 1;
-                    console.text(&font::CONSOLE, cx * CHARW, cy * CHARH,
-                                 b" ", &[bkgrd, 0, 0, color]);
-                    cursor(cx, cy);
-                }
             } else if ch == b'\x1b' {
                 escape = 1;
-            } else {
-                console.text(&font::CONSOLE, cx * CHARW, cy * CHARH,
-                             &[ch], &[bkgrd, 0, 0, color]);
-                cx += 1;
-                if cx >= COLS {
-                    // XXX duplication above
-                    cx = 0;
-                    cy += 1;
-                    if cy == ROWS {
-                        console.scroll_up(CHARH);
-                        cy -= 1;
-                    }
-                }
-                cursor(cx, cy);
+                continue;
             }
+
+            console.process_char(ch);
         }
     }
 }
-
-fn cursor(cx: u16, cy: u16) {
-    write!(LTDC.l2whpcr: whstpos = H_WIN_START + cx*CHARW + 1,
-           whsppos = H_WIN_START + (cx + 1)*CHARW);
-    write!(LTDC.l2wvpcr: wvstpos = V_WIN_START + (cy + 1)*CHARH,
-           wvsppos = V_WIN_START + (cy + 1)*CHARH);
-    // reload on next vsync
-    write!(LTDC.srcr: vbr = true);
-}
-
-fn process_escape(display: &mut Display, end: u8, seq: &[u8], cx: &mut u16, cy: &mut u16,
-                  color: &mut u8, bkgrd: &mut u8) {
-    let mut args = seq.split(|&v| v == b';').map(|n| btoi(n).unwrap_or(0));
-    match end {
-        b'm' => while let Some(arg) = args.next() {
-            match arg {
-                0  => { *color = DEFAULT_COLOR; *bkgrd = DEFAULT_BKGRD; }
-                // XXX should not get reset by color selection
-                1  => { *color |= 0b1000; } // XXX: only for 16colors
-                22 => { *color &= !0b1000; }
-                30...37 => { *color = arg as u8 - 30; }
-                40...47 => { *bkgrd = arg as u8 - 40; }
-                38 => { *color = args.nth(1).unwrap_or(0) as u8; }
-                48 => { *bkgrd = args.nth(1).unwrap_or(0) as u8; }
-                _ => {}
-            }
-        },
-        b'H' | b'f' => {
-            let y = args.next().unwrap_or(1);
-            let x = args.next().unwrap_or(1);
-            *cx = if x > 0 { x-1 } else { 0 };
-            *cy = if y > 0 { y-1 } else { 0 };
-        },
-        b'A' => {
-            let n = args.next().unwrap_or(1).max(1);
-            *cy -= n.min(*cy);
-        },
-        b'B' => {
-            let n = args.next().unwrap_or(1).max(1);
-            *cy += n.min(ROWS - *cy - 1);
-        },
-        b'C' => {
-            let n = args.next().unwrap_or(1).max(1);
-            *cx += n.min(COLS - *cx - 1);
-        },
-        b'D' => {
-            let n = args.next().unwrap_or(1).max(1);
-            *cx -= n.min(*cx);
-        },
-        b'G' => {
-            let x = args.next().unwrap_or(1).max(1);
-            *cx = x-1;
-        }
-        b'J' => {
-            // TODO: process arguments
-            display.clear(0);
-            *cx = 0;
-            *cy = 0;
-        },
-        b'K' => {}, // TODO: erase line
-        // otherwise, ignore
-        _    => {}
-    }
-}
-
-// trait DelayExt {
-//     fn delay(&mut self, ms: u32);
-// }
-
-// impl DelayExt for Delay {
-//     fn delay(&mut self, ms: u32) {
-//         for _ in 0..ms/10 {
-//             self.delay_ms(10u32);
-//         }
-//     }
-// }
 
 interrupt!(TIM3, blink, state: bool = false);
-
-static CURSOR_ENABLED: AtomicBool = ATOMIC_BOOL_INIT;
 
 pub fn enable_cursor(en: bool) {
     CURSOR_ENABLED.store(en, Ordering::Relaxed);
