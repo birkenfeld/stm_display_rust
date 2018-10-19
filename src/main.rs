@@ -34,7 +34,7 @@ mod draw;
 mod font;
 
 use draw::Display;
-use font::{NORMAL, LARGE, CONSOLE, GRAY, WHITE, RED, GREEN, ALARM};
+// use font::{NORMAL, LARGE, CONSOLE, GRAY, WHITE, RED, GREEN, ALARM};
 
 /// Width and height of visible screen.
 const WIDTH: u16 = 480;
@@ -132,7 +132,7 @@ fn inner_main() -> ! {
     let urx = gpioa.pa10.into_af7(&mut gpioa.moder, &mut gpioa.afrh);
     //let rts = gpiod.pd12.into_af7(&mut gpiod.moder, &mut gpiod.afrh);
     let mut console_uart = hal::serial::Serial::usart1(peri.USART1, (utx, urx),
-        hal::time::Bps(115200), clocks, &mut rcc.apb2);
+        hal::time::Bps(230400), clocks, &mut rcc.apb2);
     //console_uart.set_rts(rts);
     console_uart.listen(hal::serial::Event::Rxne);
     let (mut console_tx, _) = console_uart.split();
@@ -287,8 +287,6 @@ fn inner_main() -> ! {
 
     loop {
         if let Some(ch) = arm::interrupt::free(|_| fifo().pop_front()) {
-            block!(console_tx.write(ch)).unwrap();
-
             if escape == 1 {
                 escape_len = 0;
                 escape_pos = 0;
@@ -325,6 +323,8 @@ fn inner_main() -> ! {
                 continue;
             }
 
+            block!(console_tx.write(ch)).unwrap();
+
             if ch == b'\r' {
                 // do nothing
             } else if ch == b'\n' {
@@ -338,13 +338,15 @@ fn inner_main() -> ! {
             } else if ch == b'\x08' {
                 if cx > 0 {
                     cx -= 1;
-                    console.text(&CONSOLE, cx * CHARW, cy * CHARH, b" ", &[bkgrd, 0, 0, color]);
+                    console.text(&font::CONSOLE, cx * CHARW, cy * CHARH,
+                                 b" ", &[bkgrd, 0, 0, color]);
                     cursor(cx, cy);
                 }
             } else if ch == b'\x1b' {
                 escape = 1;
             } else {
-                console.text(&CONSOLE, cx * CHARW, cy * CHARH, &[ch], &[bkgrd, 0, 0, color]);
+                console.text(&font::CONSOLE, cx * CHARW, cy * CHARH,
+                             &[ch], &[bkgrd, 0, 0, color]);
                 cx += 1;
                 if cx >= COLS {
                     // XXX duplication above

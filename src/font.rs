@@ -2,11 +2,11 @@
 
 pub type TextColors = [u8; 4];
 
-pub const GRAY:  TextColors = [0, 235, 240, 245];
-pub const WHITE: TextColors = [0, 239, 247, 255];
-pub const RED:   TextColors = [0, 52, 124, 196];
-pub const GREEN: TextColors = [0, 28, 34, 46];
-pub const ALARM: TextColors = [1, 196, 210, 255];
+// pub const GRAY:  TextColors = [0, 235, 240, 245];
+// pub const WHITE: TextColors = [0, 239, 247, 255];
+// pub const RED:   TextColors = [0, 52, 124, 196];
+// pub const GREEN: TextColors = [0, 28, 34, 46];
+// pub const ALARM: TextColors = [1, 196, 210, 255];
 
 pub struct Font {
     pub data:  &'static [u8],

@@ -2,6 +2,7 @@
 import sys
 import time
 import serial
+import random
 
 CMD_MODE_GRAPHICS = 0x20
 CMD_MODE_CONSOLE = 0x21
@@ -63,6 +64,16 @@ class Display:
         self.set_pos(pos)
         self.text(string)
 
+    def attr_text(self, i, string):
+        self.select_attrs(i)
+        self.text(string)
+
+    def set_attrs(self, i, pos, colors, font):
+        self.set_pos(pos)
+        self.set_color(colors)
+        self.set_font(font)
+        self.save_attrs(i)
+
     def text(self, string):
         self.send(CMD_TEXT, string.encode('cp437'))
 
@@ -82,7 +93,7 @@ class Display:
         self.send(CMD_ICON, bytes([i]))
 
 
-s = serial.Serial(sys.argv[1], baudrate=115200)
+s = serial.Serial(sys.argv[1], baudrate=230400)
 
 d = Display(s)
 
@@ -98,51 +109,103 @@ marq_off = 0
 marq_len = 58
 
 if sys.argv[2] == '1':
-    # d.clear(255)
-    # d.set_pos((120, 22))
-    # d.set_color([0, 0, 0, 60])
-    # d.icon(0)
-    # d.switch_graphics()
-    # #time.sleep(10000)
-  #  time.sleep(5)
+    d.clear(255)
+    d.set_pos((120, 22))
+    d.set_color([60, 104, 188, 255])
+    d.icon(0)
 
-  while 1:
     d.clear(0)
-    d.set_font(1)
-    d.set_color(GRAY)
-    d.pos_text((21 * 8, 0), "ccr12.kompass.frm2")
-    d.pos_text((10, 45), "T1")
-    d.pos_text((175, 45), "K")
-    d.pos_text((10, 87), "T2")
-    d.pos_text((175, 87), "K")
-    d.pos_text((430, 45), "mbar")
-    d.pos_text((430, 87), "mbar")
+    d.set_attrs(0, (21 * 8, 0), GRAY, 1)  # ccr12
+    d.set_attrs(1, (10, 45), GRAY, 1)   # T1
+    d.set_attrs(2, (175, 45), GRAY, 1)   # K
+    d.set_attrs(3, (10, 87), GRAY, 1)   # T2
+    d.set_attrs(4, (175, 87), GRAY, 1)   # K
+    d.set_attrs(5, (430, 45), GRAY, 1)   # mbar
+    d.set_attrs(6, (430, 87), GRAY, 1)   # mbar
+    d.set_attrs(7, (40, 27), GREEN, 2)   # Wert1
+    d.set_attrs(8, (40, 69), GREEN, 2)   # Wert1
+    d.set_attrs(9, (255, 27), WHITE, 2)   # Press
+    d.set_attrs(10, (380, 20), WHITE, 2)  # PressExp
+    d.set_attrs(11, (355, 45), WHITE, 1)  # x10
+    d.set_attrs(12, (255, 69), RED, 2)    # --.--
+    d.set_attrs(13, (0, 112), ALARM, 1)  # preM
+    d.set_attrs(14, (8, 112), ALARM, 1)  # Marquee
+    d.set_attrs(15, (472, 112), ALARM, 1)  # postM
 
-    d.set_font(2)
-    d.set_color(GREEN)
-    d.pos_text((40, 27), "50.327")
-    d.pos_text((40, 69), " 4.112")
+    d.switch_graphics()
 
-    d.set_color(WHITE)
-    d.pos_text((255, 27), "0.576")
-    d.pos_text((380, 20), "-1")
-    d.set_font(1)
-    d.pos_text((355, 45), "x10")
+    t1 = time.time()
+    for i in range(10000):
+        # time.sleep(0.01)
 
-    d.set_font(2)
-    d.set_color(RED)
-    d.pos_text((255, 69), "-.---")
+        d.attr_text(0, "ccr12.kompass.frm2")
+        d.attr_text(1, "T1")
+        d.attr_text(2, "K")
+        d.attr_text(3, "T2")
+        d.attr_text(4, "K")
+        d.attr_text(5, "mbar")
+        d.attr_text(6, "mbar")
 
-    d.set_color(WHITE)
-    d.lines((0, 15), (479, 15))
-    d.lines((220, 15), (220, 111))
-    d.lines((0, 111), (479, 111))
+        d.attr_text(7, "%6.3f" % ((random.random() * 10) + 50))
+        d.attr_text(8, "%6.3f" % ((random.random() * 1) + 13))
 
-    d.set_font(1)
-    d.set_color(ALARM)
-    d.pos_text((0, 112), " ")
-    d.pos_text((472, 112), " ")
-    d.pos_text((8, 112), MARQUEE[:marq_len])
+        d.attr_text(9, "%.3f" % random.random())
+        d.attr_text(10, "-1")
+        d.attr_text(11, "x10")
+        d.attr_text(12, "-.---")
+
+        d.attr_text(13, " ")
+        d.attr_text(14, MARQUEE[:marq_len])
+        d.attr_text(15, " ")
+
+        d.set_color(WHITE)
+        d.lines((0, 16), (479, 16))
+        d.lines((220, 16), (220, 111))
+        d.lines((0, 111), (479, 111))
+
+        # d.set_font(1)
+        # d.set_color(GRAY)
+        # d.pos_text((21 * 8, 0), "ccr12.kompass.frm2")
+
+        # d.set_color(GRAY)
+        # d.pos_text((10, 45), "T1")
+        # d.pos_text((175, 45), "K")
+        # d.pos_text((10, 87), "T2")
+        # d.pos_text((175, 87), "K")
+        # d.pos_text((430, 45), "mbar")
+        # d.pos_text((430, 87), "mbar")
+
+        # d.set_font(2)
+        # d.set_color(GREEN)
+        # d.pos_text((40, 27), "%6.3f" % ((random.random() * 10) + 50))
+        # d.pos_text((40, 69), "%6.3f" % ((random.random() * 1) + 13))
+
+        # d.set_color(WHITE)
+        # d.pos_text((255, 27), "%.3f" % random.random())
+        # d.pos_text((380, 20), "-1")
+        # d.set_font(1)
+        # d.pos_text((355, 45), "x10")
+
+        # d.set_font(2)
+        # d.set_color(RED)
+        # d.pos_text((255, 69), "-.---")
+
+        # d.set_color(WHITE)
+        # d.lines((0, 16), (479, 16))
+        # d.lines((220, 16), (220, 111))
+        # d.lines((0, 111), (479, 111))
+
+        # d.set_font(1)
+        # d.set_color(ALARM)
+        # d.pos_text((0, 112), " ")
+        # d.pos_text((472, 112), " ")
+        # d.pos_text((8, 112), MARQUEE[:marq_len])
+
+        d.set_pos((240, 22))
+        d.set_color([60, 104, 188, 255])
+        d.icon(0)
+    t2 = time.time()
+    print('100x = %.2fs' % (t2-t1))
 
 else:
     d.switch_console()
