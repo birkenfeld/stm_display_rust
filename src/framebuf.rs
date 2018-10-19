@@ -1,6 +1,7 @@
 //! Basic framebuffer abstraction and drawing routines.
 
 use stm;
+use core::ptr;
 use bresenham::Bresenham;
 
 use font::Font;
@@ -105,5 +106,9 @@ impl FrameBuffer {
         // reload on next vsync
         write!(LTDC.srcr: vbr = true);
         ::enable_cursor(self.has_cursor);
+    }
+
+    pub fn clear_scroll_area(&mut self) {
+        for el in &mut self.buf[(self.width*self.height) as usize..] { *el = 0; }
     }
 }

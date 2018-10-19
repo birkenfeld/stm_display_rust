@@ -27,8 +27,7 @@ pub struct Console {
 impl Console {
     pub fn new(mut fb: FrameBuffer, tx: Tx<stm::USART1>) -> Self {
         fb.clear(0);
-        // Clear out extra scrolling part.
-        // XXX for el in &mut fb.buf[(fb.width*fb.height) as usize..] { *el = 0; }
+        fb.clear_scroll_area();
         Self { fb, tx, color: [DEFAULT_BKGRD, 0, 0, DEFAULT_COLOR], cx: 0, cy: 0 }
     }
 

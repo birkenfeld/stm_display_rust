@@ -271,6 +271,8 @@ fn inner_main() -> ! {
         console_tx
     );
 
+    console.activate();
+
     // main loop: process input
     let mut escape = 0;
     let mut escape_len = 0;
