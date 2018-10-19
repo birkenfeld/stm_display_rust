@@ -134,7 +134,7 @@ fn inner_main() -> ! {
     let urx = gpioa.pa10.into_af7(&mut gpioa.moder, &mut gpioa.afrh);
     //let rts = gpiod.pd12.into_af7(&mut gpiod.moder, &mut gpiod.afrh);
     let mut console_uart = hal::serial::Serial::usart1(peri.USART1, (utx, urx),
-        hal::time::Bps(230400), clocks, &mut rcc.apb2);
+        hal::time::Bps(115200), clocks, &mut rcc.apb2);
     //console_uart.set_rts(rts);
     console_uart.listen(hal::serial::Event::Rxne);
     let (mut console_tx, _) = console_uart.split();
