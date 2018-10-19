@@ -21,7 +21,7 @@ use btoi::btoi;
 use arraydeque::ArrayDeque;
 use hal::time::*;
 use hal::timer::{Timer, Event};
-use hal::delay::Delay;
+// use hal::delay::Delay;
 use hal::rcc::RccExt;
 use hal::gpio::GpioExt;
 use hal::flash::FlashExt;
@@ -73,8 +73,10 @@ const CURSOR_COLOR:  u8 = 127;
 const FB_SIZE: usize = (WIDTH as usize) * ((HEIGHT + CHARH) as usize);
 
 // main framebuffer
+#[link_section = ".bss.sram1"]
 static mut FRAMEBUF: [u8; FB_SIZE] = [0; FB_SIZE];
 // secondary framebuffer for console mode
+#[link_section = ".bss.sram3"]
 static mut FRAMEBUF2: [u8; FB_SIZE] = [0; FB_SIZE];
 // cursor framebuffer, just the cursor itself
 static CURSORBUF: [u8; CHARW as usize] = [CURSOR_COLOR; CHARW as usize];
@@ -107,7 +109,7 @@ fn inner_main() -> ! {
     write!(FLASH.acr: dcen = true, icen = true, prften = true);
     let mut flash = peri.FLASH.constrain();
     let clocks = rcc.cfgr.freeze(&mut flash.acr);
-    let mut delay = Delay::new(pcore.SYST, clocks);
+    // let mut delay = Delay::new(pcore.SYST, clocks);
 
     // set up pins
     let mut gpioa = peri.GPIOA.split(&mut rcc.ahb1);
@@ -427,17 +429,17 @@ fn process_escape(display: &mut Display, end: u8, seq: &[u8], cx: &mut u16, cy: 
     }
 }
 
-trait DelayExt {
-    fn delay(&mut self, ms: u32);
-}
+// trait DelayExt {
+//     fn delay(&mut self, ms: u32);
+// }
 
-impl DelayExt for Delay {
-    fn delay(&mut self, ms: u32) {
-        for _ in 0..ms/10 {
-            self.delay_ms(10u32);
-        }
-    }
-}
+// impl DelayExt for Delay {
+//     fn delay(&mut self, ms: u32) {
+//         for _ in 0..ms/10 {
+//             self.delay_ms(10u32);
+//         }
+//     }
+// }
 
 interrupt!(TIM3, blink, state: bool = false);
 

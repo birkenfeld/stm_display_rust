@@ -2,7 +2,7 @@
 #runner = 'arm-none-eabi-gdb'
 runner = './run'
 rustflags = [
-  "-C", "link-arg=-Tlink.x",
+  "-C", "link-arg=-Tcustom_link.x",
 ]
 
 [build]

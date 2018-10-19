@@ -56,25 +56,23 @@ impl Display {
     }
 
     pub fn rect(&mut self, x1: u16, y1: u16, x2: u16, y2: u16, color: u8) {
-        let nx = x2 - x1;
-        if !(x1 < x2 && x2 < self.width) || !(y1 < y2 && y2 < self.height) {
-            return;
-        }
-
-        write!(DMA2D.ocolr: green = color, blue = color);
-        write!(DMA2D.opfccr: cm = 0b100); // ARGB4444, transfer 16bits at once
-        let offset = y1*self.width + ((x1 + 1) & !1);
-        write!(DMA2D.omar: ma = self.buf.as_ptr().offset(offset as isize) as u32);
-        write!(DMA2D.oor: lo = self.width/2 - nx/2);
-        write!(DMA2D.nlr: pl = nx/2, nl = y2 - y1);
-        modif!(DMA2D.cr: mode = 0b11, start = true);
-        if nx % 2 == 1 {
-            let x = if x1 % 2 == 1 { x1 } else { x2-1 };
-            for y in y1..y2 {
-                self.set_pixel(x, y, color);
+        if x1 < x2 && x2 <= self.width && y1 < y2 && y2 <= self.height {
+            let nx = x2 - x1;
+            write!(DMA2D.ocolr: green = color, blue = color);
+            write!(DMA2D.opfccr: cm = 0b100); // ARGB4444, transfer 16bits at once
+            let offset = y1*self.width + ((x1 + 1) & !1);
+            write!(DMA2D.omar: ma = self.buf.as_ptr().offset(offset as isize) as u32);
+            write!(DMA2D.oor: lo = self.width/2 - nx/2);
+            write!(DMA2D.nlr: pl = nx/2, nl = y2 - y1);
+            modif!(DMA2D.cr: mode = 0b11, start = true);
+            if nx % 2 == 1 {
+                let x = if x1 % 2 == 1 { x1 } else { x2-1 };
+                for y in y1..y2 {
+                    self.set_pixel(x, y, color);
+                }
             }
+            wait_for!(DMA2D.cr: !start);
         }
-        wait_for!(DMA2D.cr: !start);
     }
 
     pub fn scroll_up(&mut self, line_height: u16) {
@@ -138,7 +136,7 @@ fn pos_from_bytes(pos: &[u8]) -> (u16, u16) {
 // Publicity
 const MLZLOGO: &[u8] = include_bytes!("logo_mlz.dat");
 const MLZLOGO_SIZE: (u16, u16) = (240, 88);
-const MLZ_COLORS: [u8; 4] = [60, 104, 188, 255];
+// const MLZ_COLORS: [u8; 4] = [60, 104, 188, 255];
 
 // const ARROW_UP: &[u8] = &[
 //     0b10000000, 0b00000001,
