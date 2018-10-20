@@ -1,7 +1,6 @@
 //! Basic framebuffer abstraction and drawing routines.
 
 use stm;
-use core::ptr;
 use bresenham::Bresenham;
 
 use font::Font;

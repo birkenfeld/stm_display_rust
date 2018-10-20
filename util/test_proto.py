@@ -156,8 +156,8 @@ if sys.argv[2] == '1':
 
     d.set_font(0)
     d.set_color(WHITE)
-    d.pos_text((205, 18), "200")
-    d.pos_text((205, 101), "  0")
+    d.pos_text((205, 18), " 11")
+    d.pos_text((205, 101), "  9")
     d.lines((225, 17), (225, 110))
     d.set_color(GRAY)
     d.lines((226, 61), (479, 61))
@@ -202,7 +202,7 @@ if sys.argv[2] == '1':
                 d.lines((226, 61), (479, 61))
             else:
                 d.set_color(BLUE)
-                y = int(61 - (t2-10)*50)
+                y = min(max(int(61 - (t2-10)*50), 17), 110)
                 d.lines((x-1, yp), (x, y))
                 yp = y
 
