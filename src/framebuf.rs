@@ -34,10 +34,13 @@ impl FrameBuffer {
     }
 
     pub fn text(&mut self, font: &Font, mut px: u16, py: u16, text: &[u8], colors: &Colors) {
+        let size = font.size();
         for &chr in text {
-            let off = ((chr as usize % font.n) * (font.charh * font.charw) as usize + 3) / 4;
-            self.image(px, py, &font.data[off..], (font.charw, font.charh), colors);
-            px += font.charw as u16;
+            self.image(px, py, font.data(chr), size, colors);
+            px += size.0;
+            if px >= self.width {
+                return;
+            }
         }
     }
 
