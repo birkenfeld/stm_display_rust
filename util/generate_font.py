@@ -53,6 +53,8 @@ except Exception:
     print('charset is either "ascii", "cp437" or a string of ASCII chars')
     sys.exit(1)
 
+# Determine the glyphs to be rendered.
+
 if cs == 'ascii':
     cs = ['\ufffd'] + [chr(i) for i in range(1, 128)] + ['\ufffd'] * 128
 elif cs == 'cp437':
@@ -68,13 +70,15 @@ else:
         new[idx] = ch
     cs = new
 
+# Generate the 2-bit per pixel bitmap for each glyph.
+
 chrbuf = bytearray(wd * ht * 4)
 padding = bytes([0] * ((-wd*ht) % 4))
-data = bytearray()
-indices = []
 
 weight = cairo.FontWeight.BOLD if 'Bold' in style else cairo.FontWeight.NORMAL
 slant = cairo.FontSlant.ITALIC if 'Italic' in style else cairo.FontSlant.NORMAL
+
+glyphs = {}
 
 for (i, ch) in enumerate(cs):
     surface = cairo.ImageSurface.create_for_data(chrbuf, cairo.Format.RGB24,
@@ -88,30 +92,56 @@ for (i, ch) in enumerate(cs):
     ctx.move_to(xof, ht + yof)
     ctx.show_text(ch)
     surface.finish()
+    # Get rid of superfluous color/alpha channels and add padding to make the
+    # result length a multiple of 4 (to be completely encoded).
     buf = chrbuf[::4] + padding
-    bytebuf = bytearray()
-    for i in range(0, len(buf), 4):
-        bytebuf.append((buf[i+3] // 64) << 6 |
-                       (buf[i+2] // 64) << 4 |
-                       (buf[i+1] // 64) << 2 |
-                       (buf[i]   // 64))
+    # Change colors to 2-bit per pixel.
+    # XXX: Change the distribution of 0-255 to 0,85,170,255?
+    bytebuf = bytearray(
+        (buf[i+3] // 64) << 6 |
+        (buf[i+2] // 64) << 4 |
+        (buf[i+1] // 64) << 2 |
+        (buf[i]   // 64)
+        for i in range(0, len(buf), 4))
+    # Determine amount of leading and trailing empty space to more efficiently
+    # encode the different glyphs.
+    leading = len(bytebuf) - len(bytebuf.lstrip(b'\x00'))
+    trailing = len(bytebuf) - len(bytebuf.rstrip(b'\x00'))
+    glyphs[i, leading, trailing] = bytebuf
+
+# Try to heuristically minimize the size of the data stream:
+# - If a character's bitmap already occurs somewhere, use that index.
+# - Otherwise, try to put characters with a matching amount of leading
+#   and trailing empty space next to each other.
+
+last_trailing = 0
+
+data = bytearray()
+indices = [0] * 256
+
+while glyphs:
+    matching = sorted(glyphs, key=lambda info: abs(info[1] - last_trailing))[0]
+    glyphdata = glyphs.pop(matching)
+    glyphindex = matching[0]
 
     # check for complete match within data so far
     for i in range(len(data)):
-        if data[i:i+len(bytebuf)] == bytebuf:
-            indices.append(i)
+        if data[i:i+len(glyphdata)] == glyphdata:
+            indices[glyphindex] = i
             break
     else:
         # check for partial match at the end
-        for i in range(len(bytebuf), -1, -1):
-            if data[-i:] == bytebuf[:i]:
-                indices.append(len(data) - i)
-                data.extend(bytebuf[i:])
+        for i in range(len(glyphdata), 0, -1):
+            if data[-i:] == glyphdata[:i]:
+                indices[glyphindex] = len(data) - i
+                data.extend(glyphdata[i:])
                 break
         else:
             # no match found.
-            indices.append(len(data))
-            data.extend(bytebuf)
+            indices[glyphindex] = len(data)
+            data.extend(glyphdata)
+    last_trailing = matching[2]
+
 
 open(out, 'wb').write(data)
-open(out.replace('.dat', '') + '.idx', 'w').write(str(indices))
+open(out.replace('.dat', '') + '.idx', 'w').write(str(indices) + '\n')
