@@ -63,13 +63,13 @@ const V_WIN_START:  u16 = V_SYNCPULSE + V_BACKPORCH - 1;
 // Graphics framebuffer
 const FB_GRAPHICS_SIZE: usize = (WIDTH as usize) * (HEIGHT as usize);
 
-#[link_section = ".bss.sram1"]
+#[link_section = ".sram1bss"]
 static mut FB_GRAPHICS: [u8; FB_GRAPHICS_SIZE] = [0; FB_GRAPHICS_SIZE];
 
 // Console framebuffer
 // Size includes one extra row for scrolling via DMA
 const FB_CONSOLE_SIZE: usize = (WIDTH as usize) * ((HEIGHT + CHARH) as usize);
-#[link_section = ".bss.sram3"]
+#[link_section = ".sram3bss"]
 static mut FB_CONSOLE: [u8; FB_CONSOLE_SIZE] = [0; FB_CONSOLE_SIZE];
 
 // Cursor framebuffer: just the cursor itself

@@ -20,3 +20,27 @@ MEMORY
 /* This is required only on microcontrollers that store some configuration right
    after the vector table */
 /* _stext = ORIGIN(FLASH) + 0x400; */
+
+/* Place dedicated (frame)buffers into SRAMs. */
+
+SECTIONS
+{
+  .sram1bss (NOLOAD) : ALIGN(4)
+  {
+    *(.sram1bss);
+    . = ALIGN(4);
+  } > SRAM1
+
+  .sram2bss (NOLOAD) : ALIGN(4)
+  {
+    *(.sram2bss);
+    . = ALIGN(4);
+  } > SRAM2
+
+  .sram3bss (NOLOAD) : ALIGN(4)
+  {
+    *(.sram3bss);
+    . = ALIGN(4);
+  } > SRAM3
+}
+INSERT AFTER .bss;
