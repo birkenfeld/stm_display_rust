@@ -5,8 +5,7 @@ use hal::serial::Tx;
 use hal_base::prelude::*;
 use btoi::btoi;
 
-use font;
-use framebuf::{Colors, FrameBuffer};
+use framebuf::{CONSOLEFONT, Colors, FrameBuffer};
 use ::{WIDTH, HEIGHT, CHARW, CHARH, H_WIN_START, V_WIN_START};
 
 const DEFAULT_COLOR: u8 = 7;
@@ -57,11 +56,11 @@ impl Console {
             },
             b'\x08' => if self.cx > 0 {
                 self.cx -= 1;
-                self.fb.text(&font::CONSOLE, self.cx * CHARW, self.cy * CHARH,
+                self.fb.text(CONSOLEFONT, self.cx * CHARW, self.cy * CHARH,
                              b" ", &self.color);
             },
             _ => {
-                self.fb.text(&font::CONSOLE, self.cx * CHARW, self.cy * CHARH,
+                self.fb.text(CONSOLEFONT, self.cx * CHARW, self.cy * CHARH,
                              &[ch], &self.color);
                 self.cx += 1;
                 if self.cx >= COLS {

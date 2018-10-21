@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+import os
 import sys
 import cairo
 
@@ -143,5 +144,18 @@ while glyphs:
     last_trailing = matching[2]
 
 
-open(out, 'wb').write(data)
-open(out.replace('.dat', '') + '.idx', 'w').write(str(indices) + '\n')
+datout = out.replace('.rs', '') + '.dat'
+open(datout, 'wb').write(data)
+open(out, 'w').write('''\
+Font {{
+    data:  include_bytes!("{}"),
+    chars: {},
+    charw: {},
+    charh: {},
+}}
+'''.format(
+    os.path.basename(datout),
+    str(indices),
+    wd,
+    ht,
+))

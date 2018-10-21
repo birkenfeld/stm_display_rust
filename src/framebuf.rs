@@ -3,15 +3,37 @@
 use stm;
 use bresenham::Bresenham;
 
-use font::Font;
-
 pub type Colors = [u8; 4];
 
-// pub const GRAY:  Colors = [0, 235, 240, 245];
-// pub const WHITE: Colors = [0, 239, 247, 255];
-// pub const RED:   Colors = [0, 52, 124, 196];
-// pub const GREEN: Colors = [0, 28, 34, 46];
-// pub const ALARM: Colors = [1, 196, 210, 255];
+pub struct Font {
+    /// Bitmap data, in 2bpp.
+    data:  &'static [u8],
+    /// Starting pixel index of each glyph in the data.
+    chars: [usize; 256],
+    /// Height of every char.
+    charh: u16,
+    /// Width of every char.
+    charw: u16,
+}
+
+impl Font {
+    pub const fn size(&self) -> (u16, u16) {
+        (self.charw, self.charh)
+    }
+
+    fn data(&self, chr: u8) -> &[u8] {
+        &self.data[self.chars[chr as usize]..]
+    }
+}
+
+pub const FONTS: &[Font] = &[
+    include!("font_console.rs"),
+    include!("font_medium.rs"),
+    include!("font_large.rs"),
+    include!("font_light.rs"),
+];
+
+pub const CONSOLEFONT: &'static Font = &FONTS[0];
 
 pub struct FrameBuffer {
     buf: &'static mut [u8],

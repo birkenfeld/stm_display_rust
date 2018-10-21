@@ -28,7 +28,6 @@ use core::sync::atomic::{AtomicBool, Ordering, ATOMIC_BOOL_INIT};
 
 #[macro_use]
 mod util;
-mod font;
 mod icon;
 mod console;
 mod graphics;
@@ -41,8 +40,8 @@ const WIDTH: u16 = 480;
 const HEIGHT: u16 = 128;
 
 /// Size of a character in the console output.
-const CHARW: u16 = font::CONSOLE.size().0;
-const CHARH: u16 = font::CONSOLE.size().1;
+const CHARW: u16 = framebuf::CONSOLEFONT.size().0;
+const CHARH: u16 = framebuf::CONSOLEFONT.size().1;
 
 /// Horizontal display timing.
 const H_SYNCPULSE:  u16 = 11;

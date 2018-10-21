@@ -1,9 +1,8 @@
 //! The graphical display.
 
-use font::FONTS;
 use icon::ICONS;
 use console::Console;
-use framebuf::FrameBuffer;
+use framebuf::{FONTS, FrameBuffer};
 
 const CMD_MODE_GRAPHICS: u8 = 0x20;
 const CMD_MODE_CONSOLE:  u8 = 0x21;
@@ -82,7 +81,7 @@ impl Graphics {
                 self.fb.set_clip(self.cur.clip1, self.cur.clip2);
             }
             CMD_TEXT => {
-                self.fb.text(FONTS[self.cur.font as usize], self.cur.posx,
+                self.fb.text(&FONTS[self.cur.font as usize], self.cur.posx,
                              self.cur.posy, &cmd[2..], &self.cur.color);
             }
             CMD_LINES => if data_len >= 4 && data_len % 2 == 0 {
