@@ -21,11 +21,11 @@ impl Font {
     }
 }
 
-pub const LARGE: Font = Font {
-    data:  include_bytes!("font_large.dat"),
-    chars: &include!("font_large.idx"),
-    charw: 20,
-    charh: 40,
+pub const CONSOLE: Font = Font {
+    data:  include_bytes!("font_console.dat"),
+    chars: &include!("font_console.idx"),
+    charw: 6,
+    charh: 8,
 };
 
 pub const NORMAL: Font = Font {
@@ -35,11 +35,18 @@ pub const NORMAL: Font = Font {
     charh: 16,
 };
 
-pub const CONSOLE: Font = Font {
-    data:  include_bytes!("font_console.dat"),
-    chars: &include!("font_console.idx"),
-    charw: 6,
-    charh: 8,
+pub const LARGE: Font = Font {
+    data:  include_bytes!("font_large.dat"),
+    chars: &include!("font_large.idx"),
+    charw: 20,
+    charh: 40,
 };
 
-pub const FONTS: &[&Font] = &[&CONSOLE, &NORMAL, &LARGE];
+pub const LIGHT: Font = Font {
+    data:  include_bytes!("font_light.dat"),
+    chars: &include!("font_light.idx"),
+    charw: 60,
+    charh: 120,
+};
+
+pub const FONTS: &[&Font] = &[&CONSOLE, &NORMAL, &LARGE, &LIGHT];

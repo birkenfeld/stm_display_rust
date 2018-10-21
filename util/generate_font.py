@@ -60,7 +60,7 @@ if cs == 'ascii':
 elif cs == 'cp437':
     cs = [chr(i) for i in CP437]
 else:
-    new = ['\x00'] * 256
+    new = ['\ufffd'] * 256
     for ch in cs:
         try:
             idx = CP437.index(ord(ch))
