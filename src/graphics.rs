@@ -11,24 +11,27 @@ const CMD_MODE_CONSOLE:  u8 = 0x21;
 const CMD_SET_POS:       u8 = 0x30;
 const CMD_SET_FONT:      u8 = 0x31;
 const CMD_SET_COLOR:     u8 = 0x32;
+const CMD_SET_CLIP:      u8 = 0x33;
 
-const CMD_SAVE_ATTRS:    u8 = 0x40;
-const CMD_SAVE_ATTRS_MAX:u8 = 0x4f;
+const CMD_CLEAR:         u8 = 0x40;
+const CMD_LINES:         u8 = 0x41;
+const CMD_RECT:          u8 = 0x42;
+const CMD_ICON:          u8 = 0x43;
+const CMD_TEXT:          u8 = 0x44;
 
-const CMD_SEL_ATTRS:     u8 = 0x50;
-const CMD_SEL_ATTRS_MAX: u8 = 0x5f;
+const CMD_SAVE_ATTRS:    u8 = 0xa0;
+const CMD_SAVE_ATTRS_MAX:u8 = 0xbf;
 
-const CMD_TEXT:          u8 = 0x60;
-const CMD_LINES:         u8 = 0x61;
-const CMD_RECT:          u8 = 0x62;
-const CMD_ICON:          u8 = 0x63;
-const CMD_CLEAR:         u8 = 0x64;
+const CMD_SEL_ATTRS:     u8 = 0xc0;
+const CMD_SEL_ATTRS_MAX: u8 = 0xdf;
 
 
 #[derive(Default, Clone, Copy)]
 pub struct GraphicsSetting {
     pub posx:  u16,
     pub posy:  u16,
+    pub clip1: (u16, u16),
+    pub clip2: (u16, u16),
     pub font:  u8,
     pub color: [u8; 4],
 }
@@ -36,7 +39,7 @@ pub struct GraphicsSetting {
 pub struct Graphics {
     fb: FrameBuffer,
     cur: GraphicsSetting,
-    saved: [GraphicsSetting; 16],
+    saved: [GraphicsSetting; 32],
 }
 
 fn pos_from_bytes(pos: &[u8]) -> (u16, u16) {
@@ -68,6 +71,16 @@ impl Graphics {
             CMD_SET_COLOR => if data_len >= 4 {
                 self.cur.color.copy_from_slice(&cmd[2..6]);
             }
+            CMD_SET_CLIP => {
+                if data_len >= 4 {
+                    self.cur.clip1 = pos_from_bytes(&cmd[2..]);
+                    self.cur.clip2 = pos_from_bytes(&cmd[4..]);
+                } else {
+                    self.cur.clip1 = (0, 0);
+                    self.cur.clip2 = (self.fb.width(), self.fb.height());
+                }
+                self.fb.set_clip(self.cur.clip1, self.cur.clip2);
+            }
             CMD_TEXT => {
                 self.fb.text(FONTS[self.cur.font as usize], self.cur.posx,
                              self.cur.posy, &cmd[2..], &self.cur.color);
@@ -96,6 +109,7 @@ impl Graphics {
             }
             CMD_SEL_ATTRS ..= CMD_SEL_ATTRS_MAX => {
                 self.cur = self.saved[(cmd[1] - CMD_SEL_ATTRS) as usize];
+                self.fb.set_clip(self.cur.clip1, self.cur.clip2);
             }
             CMD_SAVE_ATTRS ..= CMD_SAVE_ATTRS_MAX => {
                 self.saved[(cmd[1] - CMD_SAVE_ATTRS) as usize] = self.cur;

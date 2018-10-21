@@ -8,6 +8,7 @@ from drawlib import Display
 d = Display(serial.Serial(sys.argv[1], baudrate=115200))
 
 d.switch_graphics()
+d.reset_clip()
 d.clear(15)
 d.set_color([15, 7, 8, 0])
 f = int(sys.argv[2])

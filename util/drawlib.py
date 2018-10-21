@@ -6,18 +6,19 @@ CMD_MODE_CONSOLE = 0x21
 CMD_SET_POS = 0x30
 CMD_SET_FONT = 0x31
 CMD_SET_COLOR = 0x32
+CMD_SET_CLIP = 0x33
 
-CMD_SAVE_ATTRS = 0x40
-CMD_SAVE_ATTRS_MAX = 0x4f
+CMD_CLEAR = 0x40
+CMD_LINES = 0x41
+CMD_RECT = 0x42
+CMD_ICON = 0x43
+CMD_TEXT = 0x44
 
-CMD_SEL_ATTRS = 0x50
-CMD_SEL_ATTRS_MAX = 0x5f
+CMD_SAVE_ATTRS = 0xa0
+CMD_SAVE_ATTRS_MAX = 0xbf
 
-CMD_TEXT = 0x60
-CMD_LINES = 0x61
-CMD_RECT = 0x62
-CMD_ICON = 0x63
-CMD_CLEAR = 0x64
+CMD_SEL_ATTRS = 0xc0
+CMD_SEL_ATTRS_MAX = 0xdf
 
 
 class Display:
@@ -49,6 +50,12 @@ class Display:
 
     def set_color(self, colors):
         self.send(CMD_SET_COLOR, bytes(colors))
+
+    def set_clip(self, xy1, xy2):
+        self.send(CMD_SET_CLIP, self._pos(xy1) + self._pos(xy2))
+
+    def reset_clip(self):
+        self.send(CMD_SET_CLIP)
 
     def save_attrs(self, i):
         self.send(CMD_SAVE_ATTRS + i)

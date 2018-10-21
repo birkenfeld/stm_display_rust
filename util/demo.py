@@ -21,6 +21,7 @@ MARQUEE = ("compressor off, cooling water temperature alarm, "
 marq_len = len(MARQUEE)
 marq_off = 0
 
+d.reset_clip()
 d.clear(15)
 d.set_pos((120, 7))
 d.set_color([60, 104, 188, 15])

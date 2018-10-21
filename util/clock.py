@@ -10,6 +10,7 @@ d = Display(serial.Serial(sys.argv[1], baudrate=115200))
 
 color = [0, 8, 7, 15]
 
+d.reset_clip()
 d.clear(0)
 d.set_font(3)
 d.set_color([0, 235, 240, 245])
