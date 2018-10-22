@@ -1,4 +1,5 @@
 #!/bin/sh
+set -e
 util/generate_font.py "Px437 ATI SmallW 6x8" Regular 8 8 6 0 -1 cp437 src/font_console.rs
 util/generate_font.py Iosevka Bold 16 16 8 0 -3 cp437 src/font_medium.rs
 util/generate_font.py Iosevka Bold 40 40 20 0 -8 ascii src/font_large.rs

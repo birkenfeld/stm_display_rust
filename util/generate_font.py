@@ -2,6 +2,7 @@
 
 import os
 import sys
+import subprocess
 import cairo
 
 # Note: NUL replaced by FFFD since it cannot be drawn with pycairo
@@ -66,15 +67,24 @@ else:
         try:
             idx = CP437.index(ord(ch))
         except Exception:
-            print('char %r is not in CP437!' % ch)
+            print('error: char {!r} is not in CP437!'.format(ch))
             sys.exit(1)
         new[idx] = ch
     cs = new
 
+# Minimal checking if the font is actually present.
+
+try:
+    subprocess.check_call(['fc-list', '-q', family])
+except subprocess.CalledProcessError:
+    print('error: the requested font {!r} does not seem to be '
+          'installed'.format(family))
+    sys.exit(1)
+
 # Generate the 2-bit per pixel bitmap for each glyph.
 
 chrbuf = bytearray(wd * ht * 4)
-padding = bytes([0] * ((-wd*ht) % 4))
+padding = bytes([0] * ((-wd * ht) % 4))
 
 weight = cairo.FontWeight.BOLD if 'Bold' in style else cairo.FontWeight.NORMAL
 slant = cairo.FontSlant.ITALIC if 'Italic' in style else cairo.FontSlant.NORMAL
@@ -102,11 +112,11 @@ for (i, ch) in enumerate(cs):
                     abs(ch_width - wd)))
         xof_ch += (wd - ch_width) / 2.0
     if ht + extent.y_bearing + yof < -0.001:
-        print('warning: char {} is too high (by {}) and will be clipped'.format(
-            ch, abs(ht + extent.y_bearing + yof)))
+        print('warning: char {} is too high (by {}) and will be '
+              'clipped'.format(ch, abs(ht + extent.y_bearing + yof)))
     if extent.y_bearing + extent.height + yof > 0.001:
-        print('warning: char {} is too low (by {}) and will be clipped'.format(
-            ch, extent.y_bearing + extent.height + yof))
+        print('warning: char {} is too low (by {}) and will be '
+              'clipped'.format(ch, extent.y_bearing + extent.height + yof))
 
     ctx.set_source_rgb(0.0, 0.0, 0.0)
     ctx.paint()
