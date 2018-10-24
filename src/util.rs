@@ -41,6 +41,13 @@ macro_rules! read {
 }
 
 #[macro_export]
+macro_rules! readb {
+    ($p:ident . $r:ident : $bit:ident) => {
+        unsafe { (*stm::$p::ptr()).$r.read().$bit().bit_is_set() }
+    };
+}
+
+#[macro_export]
 macro_rules! modif {
     ($p:ident . $r:ident : $($tt:tt)+) => {
         unsafe { (*stm::$p::ptr()).$r.modify(|_, w| bitset!(w; $($tt)+)); }
@@ -54,30 +61,5 @@ macro_rules! wait_for {
     };
     ($p:ident . $r:ident : ! $bit:ident) => {
         unsafe { while (*stm::$p::ptr()).$r.read().$bit().bit_is_set() {} }
-    };
-}
-
-#[macro_export]
-macro_rules! spi_cmd {
-    ($spi:expr, $t:expr, $cs:expr, $ds:expr, $cmd:expr) => {
-        $ds.set_low();
-        $cs.set_low();
-        spi_cmd!(@send $spi, $t, $cmd);
-        $cs.set_high();
-    };
-    ($spi:expr, $t:expr, $cs:expr, $ds:expr, $cmd:expr, $($data:tt)+) => {
-        $ds.set_low();
-        $cs.set_low();
-        spi_cmd!(@send $spi, $t, $cmd);
-        $ds.set_high();
-        spi_cmd!(@send $spi, $t, $($data)+);
-        $ds.set_low();
-        $cs.set_high();
-    };
-    (@send $spi:expr, $t:expr, $($byte:expr),+) => {
-        $(
-            block!($spi.send($byte)).unwrap();
-            $t.delay_us(7u16);
-        )+
     };
 }

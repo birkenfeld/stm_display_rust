@@ -23,12 +23,14 @@ use hal::timer::{Timer, Event};
 use hal::rcc::RccExt;
 use hal::gpio::GpioExt;
 use hal::flash::FlashExt;
+use hal_base::spi;
 use hal_base::prelude::*;
 use core::sync::atomic::{AtomicBool, Ordering, ATOMIC_BOOL_INIT};
 
 #[macro_use]
 mod util;
 mod icon;
+mod spiflash;
 mod console;
 mod graphics;
 mod framebuf;
@@ -123,6 +125,16 @@ fn inner_main() -> ! {
 
     // set up blinking timer
     let mut blink_timer = Timer::tim3(peri.TIM3, Hertz(4), clocks, &mut rcc.apb1);
+
+    // External Flash memory via SPI
+    let cs = gpiob.pb12.into_push_pull_output(&mut gpiob.moder, &mut gpiob.otyper);
+    let sclk = gpiob.pb13.into_af5(&mut gpiob.moder, &mut gpiob.afrh);
+    let miso = gpiob.pb14.into_af5(&mut gpiob.moder, &mut gpiob.afrh);
+    let mosi = gpiob.pb15.into_af5(&mut gpiob.moder, &mut gpiob.afrh);
+    let spi2 = hal::spi::Spi::spi2(peri.SPI2, (sclk, miso, mosi),
+        spi::Mode { polarity: spi::Polarity::IdleLow, phase: spi::Phase::CaptureOnFirstTransition },
+        MegaHertz(40), clocks, &mut rcc.apb1);
+    let mut spi_flash = spiflash::SPIFlash::new(spi2, cs);
 
     // Console UART (USART #1)
     let utx = gpioa.pa9 .into_af7(&mut gpioa.moder, &mut gpioa.afrh);
@@ -271,6 +283,13 @@ fn inner_main() -> ! {
     );
 
     console.activate();
+
+    // spi_flash.erase_sector(0);
+    // spi_flash.write_bulk(0x100, b"01237654012376540123765401237654\x00\x00\x00\x00");
+
+    for &ch in spi_flash.read(0x100, 36) {
+        console.dump_byte(ch);
+    }
 
     // main loop: process input
     let mut escape = 0;
