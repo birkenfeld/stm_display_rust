@@ -24,6 +24,8 @@ const CMD_SAVE_ATTRS_MAX:u8 = 0xbf;
 const CMD_SEL_ATTRS:     u8 = 0xc0;
 const CMD_SEL_ATTRS_MAX: u8 = 0xdf;
 
+const CMD_BOOTMODE:      u8 = 0xf0;
+const BOOTMODE_MAGIC: &[u8] = &[0xcb, 0xef, 0x20, 0x18];
 
 #[derive(Default, Clone, Copy)]
 pub struct GraphicsSetting {
@@ -52,7 +54,7 @@ impl Graphics {
         Self { fb, cur: Default::default(), saved: Default::default() }
     }
 
-    pub fn process_command(&mut self, console: &Console, cmd: &[u8]) {
+    pub fn process_command(&mut self, console: &Console, cmd: &[u8]) -> bool {
         let data_len = cmd.len() - 2;
         match cmd[1] {
             CMD_MODE_GRAPHICS => self.fb.activate(),
@@ -113,7 +115,13 @@ impl Graphics {
             CMD_SAVE_ATTRS ..= CMD_SAVE_ATTRS_MAX => {
                 self.saved[(cmd[1] - CMD_SAVE_ATTRS) as usize] = self.cur;
             }
+            CMD_BOOTMODE => if data_len >= 4 {
+                if &cmd[2..6] == BOOTMODE_MAGIC {
+                    return true;
+                }
+            },
             _ => {}
         }
+        false
     }
 }

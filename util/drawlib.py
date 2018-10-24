@@ -20,6 +20,9 @@ CMD_SAVE_ATTRS_MAX = 0xbf
 CMD_SEL_ATTRS = 0xc0
 CMD_SEL_ATTRS_MAX = 0xdf
 
+CMD_BOOTMODE = 0xf0
+BOOTMODE_MAGIC = bytes([0xcb, 0xef, 0x20, 0x18])
+
 
 class Display:
     def __init__(self, port):
@@ -35,6 +38,9 @@ class Display:
         buf.append(cmd)
         buf.extend(argstr)
         self.port.write(buf)
+
+    def _bootmode(self):
+        self.send(CMD_BOOTMODE, BOOTMODE_MAGIC)
 
     def switch_console(self):
         self.send(CMD_MODE_CONSOLE)
