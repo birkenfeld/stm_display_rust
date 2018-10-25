@@ -23,7 +23,6 @@ use hal::timer::{Timer, Event};
 use hal::rcc::RccExt;
 use hal::gpio::GpioExt;
 use hal::flash::FlashExt;
-use hal_base::prelude::*;
 use hal_base::digital::OutputPin;
 use core::sync::atomic::{AtomicBool, Ordering, ATOMIC_BOOL_INIT};
 
