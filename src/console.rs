@@ -15,6 +15,8 @@ const DEFAULT_BKGRD: u8 = 0;
 const COLS: u16 = WIDTH / CHARW;
 const ROWS: u16 = HEIGHT / CHARH;
 
+const HEX: &[u8] = b"0123456789ABCDEF";
+
 pub struct Console {
     fb: FrameBuffer,
     tx: Tx<stm::USART1>,
@@ -41,6 +43,26 @@ impl Console {
                wvsppos = V_WIN_START + (self.cy + 1)*CHARH);
         // reload on next vsync
         write!(LTDC.srcr: vbr = true);
+    }
+
+    pub fn dump_byte(&mut self, byte: u8) {
+        self.process_char(HEX[(byte >> 4) as usize]);
+        self.process_char(HEX[(byte & 0xf) as usize]);
+    }
+
+    #[allow(unused)]
+    pub fn dump_u32(&mut self, val: u32) {
+        self.dump_byte((val >> 24) as u8);
+        self.dump_byte((val >> 16) as u8);
+        self.dump_byte((val >>  8) as u8);
+        self.dump_byte((val >>  0) as u8);
+    }
+
+    #[allow(unused)]
+    pub fn process_str(&mut self, chstr: &[u8]) {
+        for &ch in chstr {
+            self.process_char(ch);
+        }
     }
 
     pub fn process_char(&mut self, ch: u8) {
