@@ -67,7 +67,9 @@ impl Console {
 
     pub fn process_char(&mut self, ch: u8) {
         match ch {
-            b'\r' => {} // do nothing
+            b'\r' => {
+                self.cx = 0;
+            },
             b'\n' => {
                 self.cx = 0;
                 self.cy += 1;
@@ -92,7 +94,7 @@ impl Console {
         }
         self.position_cursor();
         // Echo back to sender
-        block!(self.tx.write(ch)).unwrap();
+        // block!(self.tx.write(ch)).unwrap();
     }
 
     pub fn process_escape(&mut self, end: u8, seq: &[u8]) {
