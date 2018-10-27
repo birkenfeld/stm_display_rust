@@ -91,7 +91,7 @@ impl<SPI, CS: OutputPin> SPIFlash<SPI, CS> {
 
     pub fn read<'a>(&'a mut self, addr: usize, len: usize) -> &'a [u8] {
         assert!(len <= 1024);
-        assert!(addr + len < 0x1F_FFFF);
+        assert!(addr + len <= 0x20_0000);
         self.transfer(&[OP_READ_HS, (addr >> 16) as u8, (addr >> 8) as u8, addr as u8, 0], len)
     }
 

@@ -6,7 +6,7 @@ extern crate cortex_m_rt as rt;
 extern crate cortex_m as arm;
 extern crate cortex_m_semihosting as sh;
 extern crate panic_semihosting;
-#[macro_use]
+// #[macro_use]
 extern crate nb;
 extern crate btoi;
 extern crate arraydeque;
@@ -26,9 +26,13 @@ use hal::flash::FlashExt;
 use hal_base::digital::OutputPin;
 use core::sync::atomic::{AtomicBool, Ordering, ATOMIC_BOOL_INIT};
 
+// use sh::hio;
+// use core::fmt::Write;
+
 #[macro_use]
 mod util;
 mod icon;
+mod i2ceeprom;
 mod spiflash;
 mod console;
 mod graphics;
@@ -151,6 +155,13 @@ fn inner_main() -> ! {
     //console_uart.set_rts(rts);
     console_uart.listen(hal::serial::Event::Rxne);
     let (console_tx, _) = console_uart.split();
+
+    // I2C EEPROM
+    /*
+    let i2c_scl = gpioc.pc4.into_open_drain_output(&mut gpioc.moder, &mut gpioc.otyper);
+    let i2c_sda = gpioc.pc5.into_open_drain_output(&mut gpioc.moder, &mut gpioc.otyper);
+    let mut eeprom = i2ceeprom::I2CEEprom::new(i2c_scl, i2c_sda);
+    */
 
     // LCD pins
     gpioa.pa3 .into_lcd(&mut gpioa.moder, &mut gpioa.ospeedr, &mut gpioa.afrl, 0xE);

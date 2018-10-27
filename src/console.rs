@@ -2,7 +2,7 @@
 
 use stm;
 use hal::serial::Tx;
-use hal_base::prelude::*;
+// use hal_base::prelude::*;
 use btoi::btoi;
 
 use framebuf::{CONSOLEFONT, Colors, FrameBuffer};
@@ -19,6 +19,7 @@ const HEX: &[u8] = b"0123456789ABCDEF";
 
 pub struct Console {
     fb: FrameBuffer,
+    #[allow(unused)]
     tx: Tx<stm::USART1>,
     color: Colors,
     cx: u16,
