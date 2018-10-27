@@ -157,11 +157,9 @@ fn inner_main() -> ! {
     let (console_tx, _) = console_uart.split();
 
     // I2C EEPROM
-    /*
     let i2c_scl = gpioc.pc4.into_open_drain_output(&mut gpioc.moder, &mut gpioc.otyper);
     let i2c_sda = gpioc.pc5.into_open_drain_output(&mut gpioc.moder, &mut gpioc.otyper);
     let mut eeprom = i2ceeprom::I2CEEprom::new(i2c_scl, i2c_sda);
-    */
 
     // LCD pins
     gpioa.pa3 .into_lcd(&mut gpioa.moder, &mut gpioa.ospeedr, &mut gpioa.afrl, 0xE);
@@ -288,7 +286,6 @@ fn inner_main() -> ! {
     // enable interrupts
     let mut nvic = pcore.NVIC;
     nvic.enable(stm::Interrupt::TIM3);
-    nvic.enable(stm::Interrupt::USART1);
     blink_timer.listen(Event::TimeOut);
 
     let mut graphics = graphics::Graphics::new(
@@ -300,6 +297,23 @@ fn inner_main() -> ! {
     );
 
     console.activate();
+
+    // load pre-programmed startup sequence from EEPROM
+    let mut startup_len = [0, 0];
+    let mut startup_buf = [0; 256];
+    if eeprom.read_at_addr(0, &mut startup_len).is_ok() {
+        let startup_len = (startup_len[0] as usize) | ((startup_len[1] as usize) << 8);
+        // this excludes the unprogrammed case of 0xffff
+        if startup_len > 0 && startup_len <= startup_buf.len() {
+            if eeprom.read_at_addr(64, &mut startup_buf).is_ok() {
+                for &byte in startup_buf[..startup_len].iter() {
+                    let _ = fifo().push_back(byte);
+                }
+            }
+        }
+    }
+
+    nvic.enable(stm::Interrupt::USART1);
 
     // main loop: process input
     let mut escape = 0;
@@ -337,7 +351,7 @@ fn inner_main() -> ! {
                 escape_seq[escape_pos] = ch;
                 escape_pos += 1;
                 if escape_pos == escape_len {
-                    if graphics.process_command(&console, &escape_seq[..escape_pos]) {
+                    if graphics.process_command(&console, &mut eeprom, &escape_seq[..escape_pos]) {
                         reset_to_bootloader(pcore.SCB, bootpin);
                     }
                     escape = 0;

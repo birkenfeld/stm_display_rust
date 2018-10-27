@@ -2,6 +2,7 @@
 
 use icon::ICONS;
 use console::Console;
+use i2ceeprom::I2CEEprom;
 use framebuf::{FONTS, FrameBuffer};
 
 const CMD_MODE_GRAPHICS: u8 = 0x20;
@@ -26,6 +27,8 @@ const CMD_SEL_ATTRS_MAX: u8 = 0xdf;
 
 const CMD_BOOTMODE:      u8 = 0xf0;
 const BOOTMODE_MAGIC: &[u8] = &[0xcb, 0xef, 0x20, 0x18];
+
+const CMD_SET_STARTUP:   u8 = 0xf1;
 
 #[derive(Default, Clone, Copy)]
 pub struct GraphicsSetting {
@@ -54,7 +57,7 @@ impl Graphics {
         Self { fb, cur: Default::default(), saved: Default::default() }
     }
 
-    pub fn process_command(&mut self, console: &Console, cmd: &[u8]) -> bool {
+    pub fn process_command(&mut self, console: &Console, eeprom: &mut I2CEEprom, cmd: &[u8]) -> bool {
         let data_len = cmd.len() - 2;
         match cmd[1] {
             CMD_MODE_GRAPHICS => self.fb.activate(),
@@ -120,6 +123,13 @@ impl Graphics {
                     return true;
                 }
             },
+            CMD_SET_STARTUP => {
+                if eeprom.write_at_addr(0, &[cmd.len() as u8 - 2, 0]).is_ok() {
+                    for (addr, chunk) in (64..).step_by(64).zip(cmd[2..].chunks(64)) {
+                        let _ = eeprom.write_at_addr(addr, chunk);
+                    }
+                }
+            }
             _ => {}
         }
         false

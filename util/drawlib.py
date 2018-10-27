@@ -22,6 +22,7 @@ CMD_SEL_ATTRS_MAX = 0xdf
 
 CMD_BOOTMODE = 0xf0
 BOOTMODE_MAGIC = bytes([0xcb, 0xef, 0x20, 0x18])
+CMD_SET_STARTUP = 0xf1
 
 
 class Display:
@@ -41,6 +42,9 @@ class Display:
 
     def _bootmode(self):
         self.send(CMD_BOOTMODE, BOOTMODE_MAGIC)
+
+    def _set_startup(self, cmds):
+        self.send(CMD_SET_STARTUP, cmds)
 
     def switch_console(self):
         self.send(CMD_MODE_CONSOLE)
