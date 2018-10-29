@@ -1,5 +1,6 @@
 #![no_main]
 #![no_std]
+#![feature(nll)]
 
 #[macro_use]
 extern crate cortex_m_rt as rt;
@@ -34,12 +35,12 @@ mod util;
 mod icon;
 mod i2ceeprom;
 mod spiflash;
-mod console;
-mod graphics;
+mod interface;
 mod framebuf;
+mod console;
 
 use framebuf::FrameBuffer;
-use graphics::Action;
+use interface::Action;
 
 /// Width and height of visible screen.
 const WIDTH: u16 = 480;
@@ -289,15 +290,16 @@ fn inner_main() -> ! {
     nvic.enable(stm::Interrupt::TIM3);
     blink_timer.listen(Event::TimeOut);
 
-    let mut graphics = graphics::Graphics::new(
-        FrameBuffer::new(unsafe { &mut FB_GRAPHICS }, WIDTH, HEIGHT, false)
-    );
-    let mut console = console::Console::new(
+    let console = console::Console::new(
         FrameBuffer::new(unsafe { &mut FB_CONSOLE }, WIDTH, HEIGHT, true),
         console_tx
     );
+    let mut disp = interface::DisplayState::new(
+        FrameBuffer::new(unsafe { &mut FB_GRAPHICS }, WIDTH, HEIGHT, false),
+        console
+    );
 
-    console.activate();
+    disp.console().activate();
 
     // load pre-programmed startup sequence from EEPROM
     let mut startup_len = [0, 0];
@@ -317,63 +319,21 @@ fn inner_main() -> ! {
     nvic.enable(stm::Interrupt::USART1);
 
     // main loop: process input
-    let mut escape = 0;
-    let mut escape_len = 0;
-    let mut escape_pos = 0;
-    let mut escape_seq = [0u8; 256];
-
     loop {
         if let Some(ch) = arm::interrupt::free(|_| fifo().pop_front()) {
-            if escape == 1 {
-                escape_len = 0;
-                escape_pos = 0;
-                escape = if ch == b'[' { 2 } else if ch == b'\x1b' { 3 } else { 0 };
-                continue;
-            } else if escape == 2 {
-                if (ch >= b'0' && ch <= b'9') || ch == b';' {
-                    escape_seq[escape_pos] = ch;
-                    escape_pos += 1;
-                    if escape_pos == escape_seq.len() {
-                        escape = 0;
-                    }
-                } else {
-                    console.process_escape(ch, &escape_seq[..escape_pos]);
-                    escape = 0;
-                }
-                continue;
-            } else if escape == 3 {
-                if escape_len == 0 {
-                    if ch == 0 {
-                        escape = 0;
-                    } else {
-                        escape_len = ch as usize + 1;
-                    }
-                }
-                escape_seq[escape_pos] = ch;
-                escape_pos += 1;
-                if escape_pos == escape_len {
-                    match graphics.process_command(&console, &escape_seq[..escape_pos]) {
-                        Action::None => (),
-                        Action::Reset => reset(pcore.SCB),
-                        Action::Bootloader => reset_to_bootloader(pcore.SCB, bootpin),
-                        Action::WriteEeprom(len_addr, data_addr, data) => {
-                            assert!(data_addr % 64 == 0);
-                            if eeprom.write_at_addr(len_addr, &[data.len() as u8, 0]).is_ok() {
-                                for (addr, chunk) in (data_addr..).step_by(64).zip(data.chunks(64)) {
-                                    let _ = eeprom.write_at_addr(addr, chunk);
-                                }
-                            }
+            match disp.process_byte(ch) {
+                Action::None => (),
+                Action::Reset => reset(pcore.SCB),
+                Action::Bootloader => reset_to_bootloader(pcore.SCB, bootpin),
+                Action::WriteEeprom(len_addr, data_addr, data) => {
+                    assert!(data_addr % 64 == 0);
+                    if eeprom.write_at_addr(len_addr, &[data.len() as u8, 0]).is_ok() {
+                        for (addr, chunk) in (data_addr..).step_by(64).zip(data.chunks(64)) {
+                            let _ = eeprom.write_at_addr(addr, chunk);
                         }
                     }
-                    escape = 0;
                 }
-                continue;
-            } else if ch == b'\x1b' {
-                escape = 1;
-                continue;
             }
-
-            console.process_char(ch);
         }
     }
 }

@@ -1,4 +1,4 @@
-//! The graphical display.
+//! The command interface to a client.
 
 use icon::ICONS;
 use console::Console;
@@ -41,10 +41,13 @@ pub struct GraphicsSetting {
     pub color: [u8; 4],
 }
 
-pub struct Graphics {
-    fb: FrameBuffer,
+pub struct DisplayState {
+    gfx: FrameBuffer,
+    con: Console,
     cur: GraphicsSetting,
     saved: [GraphicsSetting; 32],
+    escape: Escape,
+    escape_seq: [u8; 256],
 }
 
 pub enum Action<'a> {
@@ -54,22 +57,87 @@ pub enum Action<'a> {
     WriteEeprom(usize, usize, &'a [u8])
 }
 
+enum Escape {
+    None,
+    SawOne,
+    Console(usize),
+    Graphics(usize, usize),
+}
+
 fn pos_from_bytes(pos: &[u8]) -> (u16, u16) {
     ((((pos[0] & 1) as u16) << 8) | (pos[1] as u16),
      (pos[0] >> 1) as u16)
 }
 
-impl Graphics {
-    pub fn new(mut fb: FrameBuffer) -> Self {
-        fb.clear(255);
-        Self { fb, cur: Default::default(), saved: Default::default() }
+impl DisplayState {
+    pub fn new(mut gfx: FrameBuffer, con: Console) -> Self {
+        gfx.clear(255);
+        Self { gfx, con, cur: Default::default(), saved: Default::default(),
+               escape: Escape::None, escape_seq: [0; 256] }
     }
 
-    pub fn process_command<'a>(&mut self, console: &Console, cmd: &'a [u8]) -> Action<'a> {
+    pub fn console(&mut self) -> &mut Console {
+        &mut self.con
+    }
+
+    pub fn process_byte(&mut self, ch: u8) -> Action {
+        match self.escape {
+            Escape::None => {
+                if ch == b'\x1b' {
+                    self.escape = Escape::SawOne;
+                } else {
+                    self.con.process_char(ch);
+                }
+            }
+            Escape::SawOne => {
+                self.escape = if ch == b'[' {
+                    Escape::Console(0)
+                } else if ch == b'\x1b' {
+                    Escape::Graphics(0, 0)
+                } else {
+                    Escape::None
+                };
+            }
+            Escape::Console(ref mut pos) => {
+                if (ch >= b'0' && ch <= b'9') || ch == b';' {
+                    self.escape_seq[*pos] = ch;
+                    *pos += 1;
+                    if *pos == self.escape_seq.len() {
+                        self.escape = Escape::None;
+                    }
+                } else {
+                    self.con.process_escape(ch, &self.escape_seq[..*pos]);
+                    self.escape = Escape::None;
+                }
+            }
+            Escape::Graphics(ref mut pos, ref mut len) => {
+                if *len == 0 {
+                    if ch == 0 {
+                        // length of zero is not allowed
+                        self.escape = Escape::None;
+                        return Action::None;
+                    } else {
+                        *len = ch as usize + 1;
+                    }
+                }
+                self.escape_seq[*pos] = ch;
+                *pos += 1;
+                if *pos == *len {
+                    let escape_len = *pos;
+                    self.escape = Escape::None;
+                    return self.process_command(escape_len);
+                }
+            }
+        }
+        Action::None
+    }
+
+    pub fn process_command(&mut self, len: usize) -> Action {
+        let cmd = &self.escape_seq[..len];
         let data_len = cmd.len() - 2;
         match cmd[1] {
-            CMD_MODE_GRAPHICS => self.fb.activate(),
-            CMD_MODE_CONSOLE  => console.activate(),
+            CMD_MODE_GRAPHICS => self.gfx.activate(),
+            CMD_MODE_CONSOLE  => self.con.activate(),
             CMD_SET_POS => if data_len >= 2 {
                 let (x, y) = pos_from_bytes(&cmd[2..]);
                 self.cur.posx = x;
@@ -89,45 +157,45 @@ impl Graphics {
                     self.cur.clip2 = pos_from_bytes(&cmd[4..]);
                 } else {
                     self.cur.clip1 = (0, 0);
-                    self.cur.clip2 = (self.fb.width(), self.fb.height());
+                    self.cur.clip2 = (self.gfx.width(), self.gfx.height());
                 }
-                self.fb.set_clip(self.cur.clip1, self.cur.clip2);
+                self.gfx.set_clip(self.cur.clip1, self.cur.clip2);
             }
             CMD_TEXT => {
-                self.fb.text(&FONTS[self.cur.font as usize], self.cur.posx,
-                             self.cur.posy, &cmd[2..], &self.cur.color);
+                self.gfx.text(&FONTS[self.cur.font as usize], self.cur.posx,
+                              self.cur.posy, &cmd[2..], &self.cur.color);
             }
             CMD_LINES => if data_len >= 4 && data_len % 2 == 0 {
                 let mut pos1 = pos_from_bytes(&cmd[2..]);
                 for i in 1..data_len/2 {
                     let pos2 = pos_from_bytes(&cmd[2+2*i..]);
-                    self.fb.line(pos1.0, pos1.1, pos2.0, pos2.1, self.cur.color[3]);
+                    self.gfx.line(pos1.0, pos1.1, pos2.0, pos2.1, self.cur.color[3]);
                     pos1 = pos2;
                 }
             }
             CMD_RECT => if data_len >= 4 {
                 let pos1 = pos_from_bytes(&cmd[2..]);
                 let pos2 = pos_from_bytes(&cmd[4..]);
-                self.fb.rect(pos1.0, pos1.1, pos2.0, pos2.1, self.cur.color[3]);
+                self.gfx.rect(pos1.0, pos1.1, pos2.0, pos2.1, self.cur.color[3]);
             }
             CMD_ICON => if data_len >= 1 {
                 if cmd[2] < ICONS.len() as u8 {
                     let (data, size) = ICONS[cmd[2] as usize];
-                    self.fb.image(self.cur.posx, self.cur.posy, data, size, &self.cur.color);
+                    self.gfx.image(self.cur.posx, self.cur.posy, data, size, &self.cur.color);
                 }
             }
             CMD_CLEAR => if data_len >= 1 {
-                self.fb.clear(cmd[2]);
+                self.gfx.clear(cmd[2]);
             }
             CMD_COPYRECT => if data_len >= 6 {
                 let pos1 = pos_from_bytes(&cmd[2..]);
                 let pos2 = pos_from_bytes(&cmd[4..]);
                 let pos3 = pos_from_bytes(&cmd[6..]);
-                self.fb.copy_rect(pos1.0, pos1.1, pos2.0, pos2.1, pos3.0, pos3.1);
+                self.gfx.copy_rect(pos1.0, pos1.1, pos2.0, pos2.1, pos3.0, pos3.1);
             }
             CMD_SEL_ATTRS ..= CMD_SEL_ATTRS_MAX => {
                 self.cur = self.saved[(cmd[1] - CMD_SEL_ATTRS) as usize];
-                self.fb.set_clip(self.cur.clip1, self.cur.clip2);
+                self.gfx.set_clip(self.cur.clip1, self.cur.clip2);
             }
             CMD_SAVE_ATTRS ..= CMD_SAVE_ATTRS_MAX => {
                 self.saved[(cmd[1] - CMD_SAVE_ATTRS) as usize] = self.cur;
