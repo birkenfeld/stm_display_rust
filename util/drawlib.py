@@ -14,6 +14,7 @@ CMD_RECT = 0x42
 CMD_ICON = 0x43
 CMD_TEXT = 0x44
 CMD_COPYRECT = 0x45
+CMD_PLOT = 0x46
 
 CMD_SAVE_ATTRS = 0xa0
 CMD_SAVE_ATTRS_MAX = 0xbf
@@ -115,6 +116,12 @@ class Display:
         for xy in coords:
             buf.extend(self._pos(xy))
         self.send(CMD_LINES, buf)
+
+    def plot(self, x, y1, *ys):
+        buf = bytearray(self._pos((x, y1)))
+        for y in ys:
+            buf.append(y)
+        self.send(CMD_PLOT, buf)
 
     def rect(self, xy1, xy2):
         self.send(CMD_RECT, self._pos(xy1) + self._pos(xy2))

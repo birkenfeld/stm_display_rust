@@ -13,7 +13,7 @@ d.set_color([60,104,188,15])
 d.icon(0)
 d.set_color([15, 7, 8, 0])
 d.set_font(1)
-d.pos_text((120, 103), "Booting...".center(30))
+d.pos_text((120, 103), "Touch me!".center(30))
 d.switch_graphics()
 d.set_startup()
 

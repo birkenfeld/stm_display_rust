@@ -18,6 +18,7 @@ const CMD_RECT:          u8 = 0x42;
 const CMD_ICON:          u8 = 0x43;
 const CMD_TEXT:          u8 = 0x44;
 const CMD_COPYRECT:      u8 = 0x45;
+const CMD_PLOT:          u8 = 0x46;
 
 const CMD_SAVE_ATTRS:    u8 = 0xa0;
 const CMD_SAVE_ATTRS_MAX:u8 = 0xbf;
@@ -192,6 +193,14 @@ impl DisplayState {
                 let pos2 = pos_from_bytes(&cmd[4..]);
                 let pos3 = pos_from_bytes(&cmd[6..]);
                 self.gfx.copy_rect(pos1.0, pos1.1, pos2.0, pos2.1, pos3.0, pos3.1);
+            }
+            CMD_PLOT => if data_len >= 3 {
+                let (mut x, mut y0) = pos_from_bytes(&cmd[2..]);
+                for &y1 in &cmd[4..] {
+                    self.gfx.line(x, y0, x+1, y1 as u16, self.cur.color[3]);
+                    x += 1;
+                    y0 = y1 as u16;
+                }
             }
             CMD_SEL_ATTRS ..= CMD_SEL_ATTRS_MAX => {
                 self.cur = self.saved[(cmd[1] - CMD_SEL_ATTRS) as usize];
