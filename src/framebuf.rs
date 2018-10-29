@@ -115,8 +115,8 @@ impl FrameBuffer {
         y1 = y1.max(self.clip1.1).min(self.clip2.1);
         y2 = y2.max(y1).min(self.clip2.1);
 
-        // Since DMA2D's smallest transfer unit is 16 bit, split off the unaligned
-        // bytes here and draw them individually.
+        // Since DMA2D's smallest register->memory transfer unit is 16 bit, split off
+        // the unaligned bytes here and draw them individually.
         let dma_x1 = (x1 + 1) & !1;
         let dma_x2 = x2 & !1;
         let dma_nx = dma_x2 - dma_x1;
@@ -142,6 +142,37 @@ impl FrameBuffer {
         if dma_nx != 0 {
             wait_for!(DMA2D.cr: !start);
         }
+    }
+
+    pub fn copy_rect(&mut self, mut x1: u16, mut y1: u16, x2: u16, y2: u16, mut dx: u16, mut dy: u16) {
+        if x1 >= self.width || y1 >= self.height || dx >= self.clip2.0 || dy >= self.clip2.1 {
+            return;
+        }
+        let mut nx = x2.max(x1) - x1;
+        let mut ny = y2.max(y1) - y1;
+
+        if dx < self.clip1.0 {
+            nx -= self.clip1.0 - dx;
+            x1 += self.clip1.0 - dx;
+            dx = self.clip1.0;
+        }
+        if dy < self.clip1.1 {
+            ny -= self.clip1.1 - dy;
+            y1 += self.clip1.1 - dy;
+            dy = self.clip1.1;
+        }
+        nx = nx.min(self.clip2.0 - dx);
+        ny = ny.min(self.clip2.1 - dy);
+
+        let s_offset = y1*self.width + x1;
+        let d_offset = dy*self.width + dx;
+        write!(DMA2D.fgmar: ma = self.buf.as_ptr().offset(s_offset as isize) as u32);
+        write!(DMA2D.fgor: lo = self.width - nx);
+        write!(DMA2D.omar: ma = self.buf.as_ptr().offset(d_offset as isize) as u32);
+        write!(DMA2D.oor: lo = self.width - nx);
+        write!(DMA2D.nlr: pl = nx, nl = ny);
+        modif!(DMA2D.cr: mode = 0, start = true);
+        wait_for!(DMA2D.cr: !start);
     }
 
     pub fn scroll_up(&mut self, line_height: u16) {

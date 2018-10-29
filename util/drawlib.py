@@ -13,6 +13,7 @@ CMD_LINES = 0x41
 CMD_RECT = 0x42
 CMD_ICON = 0x43
 CMD_TEXT = 0x44
+CMD_COPYRECT = 0x45
 
 CMD_SAVE_ATTRS = 0xa0
 CMD_SAVE_ATTRS_MAX = 0xbf
@@ -104,6 +105,10 @@ class Display:
 
     def clear(self, color):
         self.send(CMD_CLEAR, bytes([color]))
+
+    def copy_rect(self, xy1, xy2, dxy):
+        self.send(CMD_COPYRECT, self._pos(xy1) + self._pos(xy2) +
+                  self._pos(dxy))
 
     def icon(self, i):
         self.send(CMD_ICON, bytes([i]))

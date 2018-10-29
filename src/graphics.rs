@@ -18,6 +18,7 @@ const CMD_LINES:         u8 = 0x41;
 const CMD_RECT:          u8 = 0x42;
 const CMD_ICON:          u8 = 0x43;
 const CMD_TEXT:          u8 = 0x44;
+const CMD_COPYRECT:      u8 = 0x45;
 
 const CMD_SAVE_ATTRS:    u8 = 0xa0;
 const CMD_SAVE_ATTRS_MAX:u8 = 0xbf;
@@ -110,6 +111,12 @@ impl Graphics {
             }
             CMD_CLEAR => if data_len >= 1 {
                 self.fb.clear(cmd[2]);
+            }
+            CMD_COPYRECT => if data_len >= 6 {
+                let pos1 = pos_from_bytes(&cmd[2..]);
+                let pos2 = pos_from_bytes(&cmd[4..]);
+                let pos3 = pos_from_bytes(&cmd[6..]);
+                self.fb.copy_rect(pos1.0, pos1.1, pos2.0, pos2.1, pos3.0, pos3.1);
             }
             CMD_SEL_ATTRS ..= CMD_SEL_ATTRS_MAX => {
                 self.cur = self.saved[(cmd[1] - CMD_SEL_ATTRS) as usize];
