@@ -22,13 +22,16 @@ CMD_SEL_ATTRS = 0xc0
 CMD_SEL_ATTRS_MAX = 0xdf
 
 CMD_BOOTMODE = 0xf0
-BOOTMODE_MAGIC = bytes([0xcb, 0xef, 0x20, 0x18])
-CMD_SET_STARTUP = 0xf1
+CMD_RESET = 0xf1
+CMD_SET_STARTUP = 0xf2
+
+RESET_MAGIC = bytes([0xcb, 0xef, 0x20, 0x18])
 
 
 class Display:
     def __init__(self, port):
         self.port = port
+        self._record = None
 
     def _pos(self, xy):
         x, y = xy
@@ -36,15 +39,28 @@ class Display:
 
     def send(self, cmd, argstr=b''):
         buf = bytearray(b'\x1b\x1b')
+        if len(argstr) > 254:
+            raise ValueError('command too long')
         buf.append(len(argstr) + 1)
         buf.append(cmd)
         buf.extend(argstr)
-        self.port.write(buf)
+        if self._record is None:
+            self.port.write(buf)
+        else:
+            self._record.append(buf)
 
     def _bootmode(self):
-        self.send(CMD_BOOTMODE, BOOTMODE_MAGIC)
+        self.send(CMD_BOOTMODE, RESET_MAGIC)
 
-    def _set_startup(self, cmds):
+    def _reset(self):
+        self.send(CMD_RESET, RESET_MAGIC)
+
+    def record_startup(self):
+        self._record = []
+
+    def set_startup(self):
+        cmds = b''.join(self._record)
+        self._record = None
         self.send(CMD_SET_STARTUP, cmds)
 
     def switch_console(self):

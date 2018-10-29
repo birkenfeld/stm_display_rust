@@ -105,7 +105,7 @@ impl I2CEEprom {
     pub fn write_at_addr(&mut self, addr: usize, buf: &[u8]) -> Result<()> {
         // write within one 64-byte page
         assert!(addr + buf.len() <= 0x8000);
-        assert!(addr & 0xfffc0 == (addr + buf.len()) & 0xfffc0);
+        assert!(addr & 0xfffc0 == (addr + buf.len() - 1) & 0xfffc0);
         self.start_cond();
         self.write_devsel(false)?;
         self.write_byte((addr >> 8) as u8)?;

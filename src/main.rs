@@ -39,6 +39,7 @@ mod graphics;
 mod framebuf;
 
 use framebuf::FrameBuffer;
+use graphics::Action;
 
 /// Width and height of visible screen.
 const WIDTH: u16 = 480;
@@ -351,8 +352,18 @@ fn inner_main() -> ! {
                 escape_seq[escape_pos] = ch;
                 escape_pos += 1;
                 if escape_pos == escape_len {
-                    if graphics.process_command(&console, &mut eeprom, &escape_seq[..escape_pos]) {
-                        reset_to_bootloader(pcore.SCB, bootpin);
+                    match graphics.process_command(&console, &escape_seq[..escape_pos]) {
+                        Action::None => (),
+                        Action::Reset => reset(pcore.SCB),
+                        Action::Bootloader => reset_to_bootloader(pcore.SCB, bootpin),
+                        Action::WriteEeprom(len_addr, data_addr, data) => {
+                            assert!(data_addr % 64 == 0);
+                            if eeprom.write_at_addr(len_addr, &[data.len() as u8, 0]).is_ok() {
+                                for (addr, chunk) in (data_addr..).step_by(64).zip(data.chunks(64)) {
+                                    let _ = eeprom.write_at_addr(addr, chunk);
+                                }
+                            }
+                        }
                     }
                     escape = 0;
                 }
@@ -401,6 +412,17 @@ fn DefaultHandler(irqn: i16) {
 }
 
 const SCB_AIRCR_RESET: u32 = 0x05FA_0004;
+
+pub fn reset(scb: stm::SCB) -> ! {
+    unsafe {
+        arm::interrupt::disable();
+        arm::asm::dsb();
+        // do a soft-reset of the cpu
+        scb.aircr.write(SCB_AIRCR_RESET);
+        arm::asm::dsb();
+        unreachable!()
+    }
+}
 
 pub fn reset_to_bootloader<O: OutputPin>(scb: stm::SCB, mut pin: O) -> ! {
     unsafe {
