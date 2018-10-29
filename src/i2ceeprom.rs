@@ -117,4 +117,30 @@ impl I2CEEprom {
         arm::asm::delay(1_000_000);  // wait 5ms write time
         Ok(())
     }
+
+    pub fn read_stored_entry<'a>(&mut self, len_addr: usize, data_addr: usize,
+                                 data_buf: &'a mut [u8]) -> Result<&'a [u8]> {
+        assert!(data_addr % 64 == 0);
+        let mut len_buf = [0, 0];
+        self.read_at_addr(len_addr, &mut len_buf)?;
+        let len = (len_buf[0] as usize) | ((len_buf[1] as usize) << 8);
+        // this excludes the unprogrammed case of 0xffff
+        if len > 0 && len <= data_buf.len() {
+            self.read_at_addr(data_addr, data_buf)?;
+            Ok(data_buf)
+        } else {
+            Ok(&[])
+        }
+    }
+
+    pub fn write_stored_entry(&mut self, len_addr: usize, data_addr: usize,
+                              data_buf: &[u8]) -> Result<()> {
+        assert!(data_addr % 64 == 0);
+        let len_buf = [data_buf.len() as u8, (data_buf.len() >> 8) as u8];
+        self.write_at_addr(len_addr, &len_buf)?;
+        for (addr, chunk) in (data_addr..).step_by(64).zip(data_buf.chunks(64)) {
+            self.write_at_addr(addr, chunk)?;
+        }
+        Ok(())
+    }
 }

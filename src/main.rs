@@ -279,23 +279,18 @@ fn inner_main() -> ! {
         console
     );
 
+    // switch to console if nothing else programmed
     disp.console().activate();
 
     // load pre-programmed startup sequence from EEPROM
-    let mut startup_len = [0, 0];
     let mut startup_buf = [0; 256];
-    if eeprom.read_at_addr(0, &mut startup_len).is_ok() {
-        let startup_len = (startup_len[0] as usize) | ((startup_len[1] as usize) << 8);
-        // this excludes the unprogrammed case of 0xffff
-        if startup_len > 0 && startup_len <= startup_buf.len() {
-            if eeprom.read_at_addr(64, &mut startup_buf).is_ok() {
-                for &byte in startup_buf[..startup_len].iter() {
-                    let _ = fifo().push_back(byte);
-                }
-            }
+    if let Ok(code) = eeprom.read_stored_entry(0, 64, &mut startup_buf) {
+        for &byte in code {
+            let _ = fifo().push_back(byte);
         }
     }
 
+    // activate USART receiver
     nvic.enable(stm::Interrupt::USART1);
 
     // main loop: process input
@@ -306,12 +301,7 @@ fn inner_main() -> ! {
                 Action::Reset => reset(pcore.SCB),
                 Action::Bootloader => reset_to_bootloader(pcore.SCB, bootpin),
                 Action::WriteEeprom(len_addr, data_addr, data) => {
-                    assert!(data_addr % 64 == 0);
-                    if eeprom.write_at_addr(len_addr, &[data.len() as u8, 0]).is_ok() {
-                        for (addr, chunk) in (data_addr..).step_by(64).zip(data.chunks(64)) {
-                            let _ = eeprom.write_at_addr(addr, chunk);
-                        }
-                    }
+                    let _ = eeprom.write_stored_entry(len_addr, data_addr, data);
                 }
             }
         }
