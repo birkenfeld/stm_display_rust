@@ -93,28 +93,24 @@ fn fifo() -> &'static mut ArrayDeque<[u8; 1024]> {
 
 #[entry]
 fn main() -> ! {
-    inner_main()
-}
-
-fn inner_main() -> ! {
     // let mut stdout = hio::hstdout().unwrap();
     let pcore = arm::Peripherals::take().unwrap();
     let peri = stm::Peripherals::take().unwrap();
 
-    // configure clock
+    // Configure clock
     let mut rcc = peri.RCC.constrain();
     rcc.cfgr = rcc.cfgr.sysclk(MegaHertz(168))
         .hclk(MegaHertz(168))
         .pclk1(MegaHertz(42))
         .pclk2(MegaHertz(84));
 
-    // activate flash caches
+    // Activate flash caches
     write!(FLASH.acr: dcen = true, icen = true, prften = true);
     let mut flash = peri.FLASH.constrain();
     let clocks = rcc.cfgr.freeze(&mut flash.acr);
     // let mut delay = Delay::new(pcore.SYST, clocks);
 
-    // set up pins
+    // Set up pins
     let mut gpioa = peri.GPIOA.split(&mut rcc.ahb1);
     let mut gpiob = peri.GPIOB.split(&mut rcc.ahb1);
     let mut gpioc = peri.GPIOC.split(&mut rcc.ahb1);
@@ -129,11 +125,11 @@ fn inner_main() -> ! {
     let mut backlight = gpiod.pd12.into_push_pull_output(&mut gpiod.moder, &mut gpiod.otyper);
     backlight.set_high();
 
-    // Pin connected to Boot0
+    // Output pin connected to Boot0 + capacitor
     let mut bootpin = gpiob.pb7.into_push_pull_output(&mut gpiob.moder, &mut gpiob.otyper);
     bootpin.set_low();
 
-    // set up blinking timer
+    // Set up blinking timer
     let mut blink_timer = Timer::tim3(peri.TIM3, Hertz(4), clocks, &mut rcc.apb1);
 
     // External Flash memory via SPI
@@ -152,10 +148,8 @@ fn inner_main() -> ! {
     // Console UART (USART #1)
     let utx = gpioa.pa9 .into_af7(&mut gpioa.moder, &mut gpioa.afrh);
     let urx = gpioa.pa10.into_af7(&mut gpioa.moder, &mut gpioa.afrh);
-    //let rts = gpiod.pd12.into_af7(&mut gpiod.moder, &mut gpiod.afrh);
     let mut console_uart = hal::serial::Serial::usart1(peri.USART1, (utx, urx),
         hal::time::Bps(115200), clocks, &mut rcc.apb2);
-    //console_uart.set_rts(rts);
     console_uart.listen(hal::serial::Event::Rxne);
     let (console_tx, _) = console_uart.split();
 
@@ -188,17 +182,17 @@ fn inner_main() -> ! {
     gpioe.pe14.into_lcd(&mut gpioe.moder, &mut gpioe.ospeedr, &mut gpioe.afrh, 0xE);
     gpioe.pe15.into_lcd(&mut gpioe.moder, &mut gpioe.ospeedr, &mut gpioe.afrh, 0xE);
 
-    // enable clocks
+    // Enable clocks
     modif!(RCC.apb2enr: ltdcen = true);
     modif!(RCC.ahb1enr: dma2den = true);
-    // enable PLLSAI
-    // PLLSAI_VCO Input = HSE_VALUE/PLL_M = 1 Mhz
-    // PLLSAI_VCO Output = PLLSAI_VCO Input * PLLSAI_N = 216 Mhz (f=100..432 MHz)
-    // PLLLCDCLK = PLLSAI_VCO Output/PLLSAI_R = 216/3 = 72 Mhz  (r=2..7)
-    // LTDC clock frequency = PLLLCDCLK / RCC_PLLSAIDivR = 72/8 = 9 Mhz (/2 /4 /8 /16)
+    // Enable PLLSAI for LTDC
+    //   PLLSAI_VCO Input = HSE_VALUE/PLL_M = 1 Mhz
+    //   PLLSAI_VCO Output = PLLSAI_VCO Input * PLLSAI_N = 216 Mhz (f=100..432 MHz)
+    //   PLLLCDCLK = PLLSAI_VCO Output/PLLSAI_R = 216/3 = 72 Mhz  (r=2..7)
+    //   LTDC clock frequency = PLLLCDCLK / RCC_PLLSAIDivR = 72/8 = 9 Mhz (/2 /4 /8 /16)
     write!(RCC.pllsaicfgr: pllsain = 216, pllsaiq = 7, pllsair = 3);
     write!(RCC.dckcfgr: pllsaidivr = 0b10);  // divide by 8
-    // enable PLLSAI and wait for it
+    // Enable PLLSAI and wait for it
     modif!(RCC.cr: pllsaion = true);
     wait_for!(RCC.cr: pllsairdy);
 
@@ -238,7 +232,7 @@ fn inner_main() -> ! {
 
     // Configure layer 2 (cursor)
 
-    // initial position: top left character
+    // Initial position: top left character
     write!(LTDC.l2whpcr: whstpos = H_WIN_START + 1, whsppos = H_WIN_START + CHARW);
     write!(LTDC.l2wvpcr: wvstpos = V_WIN_START + CHARH, wvsppos = V_WIN_START + CHARH);
     write!(LTDC.l2pfcr: pf = 0b101);  // L-8 without CLUT
@@ -253,8 +247,8 @@ fn inner_main() -> ! {
     modif!(LTDC.l1cr: cluten = true, len = true);
     modif!(LTDC.l2cr: len = false);
 
-    // Reload config again
-    write!(LTDC.srcr: imr = true);  // Immediate reload
+    // Reload config (immediate)
+    write!(LTDC.srcr: imr = true);
 
     // Dither on, display on
     modif!(LTDC.gcr: den = true, ltdcen = true);
@@ -262,10 +256,10 @@ fn inner_main() -> ! {
     // Reload config to show display
     write!(LTDC.srcr: imr = true);
 
-    // enable external display
+    // Enable display via GPIO too
     disp_on.set_high();
 
-    // enable interrupts
+    // Enable interrupts
     let mut nvic = pcore.NVIC;
     nvic.enable(stm::Interrupt::TIM3);
     blink_timer.listen(Event::TimeOut);
@@ -279,10 +273,10 @@ fn inner_main() -> ! {
         console
     );
 
-    // switch to console if nothing else programmed
+    // Switch to console if nothing else programmed
     disp.console().activate();
 
-    // load pre-programmed startup sequence from EEPROM
+    // Load pre-programmed startup sequence from EEPROM
     let mut startup_buf = [0; 256];
     if let Ok(code) = eeprom.read_stored_entry(0, 64, &mut startup_buf) {
         for &byte in code {
@@ -290,10 +284,10 @@ fn inner_main() -> ! {
         }
     }
 
-    // activate USART receiver
+    // Activate USART receiver
     nvic.enable(stm::Interrupt::USART1);
 
-    // main loop: process input
+    // Main loop: process input from UART
     loop {
         if let Some(ch) = arm::interrupt::free(|_| fifo().pop_front()) {
             match disp.process_byte(ch) {
@@ -315,11 +309,11 @@ pub fn enable_cursor(en: bool) {
 }
 
 fn blink(visible: &mut bool) {
-    // toggle layer2 on next vsync
+    // Toggle layer2 on next vsync
     *visible = !*visible;
     modif!(LTDC.l2cr: len = bit(CURSOR_ENABLED.load(Ordering::Relaxed) && *visible));
     write!(LTDC.srcr: vbr = true);
-    // reset timer
+    // Reset timer
     modif!(TIM3.sr: uif = false);
     modif!(TIM3.cr1: cen = true);
 }
@@ -347,7 +341,7 @@ pub fn reset(scb: stm::SCB) -> ! {
     unsafe {
         arm::interrupt::disable();
         arm::asm::dsb();
-        // do a soft-reset of the cpu
+        // Do a soft-reset of the cpu
         scb.aircr.write(SCB_AIRCR_RESET);
         arm::asm::dsb();
         unreachable!()
@@ -357,11 +351,10 @@ pub fn reset(scb: stm::SCB) -> ! {
 pub fn reset_to_bootloader<O: OutputPin>(scb: stm::SCB, mut pin: O) -> ! {
     unsafe {
         arm::interrupt::disable();
-        // set boot0 high (keeps high through reset via RC circuit)
+        // Set Boot0 high (keeps high through reset via RC circuit)
         pin.set_high();
         arm::asm::delay(10000);
         arm::asm::dsb();
-        // do a soft-reset of the cpu
         scb.aircr.write(SCB_AIRCR_RESET);
         arm::asm::dsb();
         unreachable!()
