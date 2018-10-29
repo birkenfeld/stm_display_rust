@@ -39,6 +39,7 @@ mod interface;
 mod framebuf;
 mod console;
 
+use console::Console;
 use framebuf::FrameBuffer;
 use interface::Action;
 
@@ -230,30 +231,9 @@ fn inner_main() -> ! {
     write!(LTDC.l1cfblr: cfbll = WIDTH + 3, cfbp = WIDTH);
     // Frame buffer number of lines
     write!(LTDC.l1cfblnr: cfblnbr = HEIGHT);
-
     // Set up 256-color LUT
-
-    // default ANSI colors
-    for v in 0..16 {
-        let b = (v & 4 != 0) as u8;
-        let g = (v & 2 != 0) as u8;
-        let r = (v & 1 != 0) as u8;
-        let i = (v & 8 != 0) as u8;
-        write!(LTDC.l1clutwr: clutadd = v,
-               red = 0x55*(r<<1 | i), green = 0x55*(g<<1 | i), blue = 0x55*(b<<1 | i));
-    }
-    // 6x6x6 color cube
-    for r in 0..6 {
-        for g in 0..6 {
-            for b in 0..6 {
-                write!(LTDC.l1clutwr: clutadd = 16 + 36*r + 6*g + b,
-                       red = 0x33*r, green = 0x33*g, blue = 0x33*b);
-            }
-        }
-    }
-    // grayscale
-    for i in 0..24 {
-        write!(LTDC.l1clutwr: clutadd = 232+i, red = 8+10*i, green = 8+10*i, blue = 8+10*i);
+    for (i, (r, g, b)) in Console::get_lut_colors().enumerate() {
+        write!(LTDC.l1clutwr: clutadd = i as u8, red = r, green = g, blue = b);
     }
 
     // Configure layer 2 (cursor)
