@@ -12,7 +12,7 @@ debug = true
 
 [dependencies]
 nb = "0.1"
-arraydeque = { version = "0.4", default-features = false }
+heapless = { version = "0.4", features = ["const-fn", "smaller-atomics"] }
 btoi = { version = "0.4", default-features = false }
 bresenham = "0.1"
 cortex-m = "0.5"

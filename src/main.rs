@@ -10,7 +10,7 @@ extern crate panic_semihosting;
 // #[macro_use]
 extern crate nb;
 extern crate btoi;
-extern crate arraydeque;
+extern crate heapless;
 extern crate bresenham;
 extern crate embedded_hal as hal_base;
 #[macro_use]
@@ -18,7 +18,8 @@ extern crate stm32f429 as stm;
 extern crate stm32f429_hal as hal;
 
 use rt::ExceptionFrame;
-use arraydeque::ArrayDeque;
+use heapless::spsc::Queue;
+use heapless::consts::*;
 use hal::time::*;
 use hal::timer::{Timer, Event};
 use hal::rcc::RccExt;
@@ -84,12 +85,8 @@ const CURSOR_COLOR: u8 = 127;
 static CURSORBUF: [u8; CHARW as usize] = [CURSOR_COLOR; CHARW as usize];
 static CURSOR_ENABLED: AtomicBool = ATOMIC_BOOL_INIT;
 
-// TX receive buffer
-static mut RXBUF: Option<ArrayDeque<[u8; 1024]>> = None;
-
-fn fifo() -> &'static mut ArrayDeque<[u8; 1024]> {
-    unsafe { RXBUF.get_or_insert_with(ArrayDeque::new) }
-}
+// UART receive buffer
+static mut UART_RX: Queue<u8, U1024, u16> = Queue::u16();
 
 #[entry]
 fn main() -> ! {
@@ -280,7 +277,7 @@ fn main() -> ! {
     let mut startup_buf = [0; 256];
     if let Ok(code) = eeprom.read_stored_entry(0, 64, &mut startup_buf) {
         for &byte in code {
-            let _ = fifo().push_back(byte);
+            unsafe { UART_RX.enqueue_unchecked(byte); }
         }
     }
 
@@ -288,8 +285,9 @@ fn main() -> ! {
     nvic.enable(stm::Interrupt::USART1);
 
     // Main loop: process input from UART
+    let mut fifo = unsafe { UART_RX.split().1 };
     loop {
-        if let Some(ch) = arm::interrupt::free(|_| fifo().pop_front()) {
+        if let Some(ch) = fifo.dequeue() {
             match disp.process_byte(ch) {
                 Action::None => (),
                 Action::Reset => reset(pcore.SCB),
@@ -322,7 +320,7 @@ interrupt!(USART1, receive);
 
 fn receive() {
     let data = read!(USART1.dr: dr) as u8;
-    let _ = fifo().push_back(data);
+    unsafe { let _ = UART_RX.split().0.enqueue(data); }
 }
 
 #[exception]
