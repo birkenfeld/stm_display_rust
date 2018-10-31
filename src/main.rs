@@ -136,9 +136,7 @@ fn main() -> ! {
     let miso = gpiob.pb14.into_af5(&mut gpiob.moder, &mut gpiob.afrh);
     let mosi = gpiob.pb15.into_af5(&mut gpiob.moder, &mut gpiob.afrh);
     let spi2 = hal::spi::Spi::spi2(peri.SPI2, (sclk, miso, mosi),
-        hal_base::spi::Mode { polarity: hal_base::spi::Polarity::IdleLow,
-                              phase: hal_base::spi::Phase::CaptureOnFirstTransition },
-        MegaHertz(40), clocks, &mut rcc.apb1);
+        hal_base::spi::MODE_0, MegaHertz(40), clocks, &mut rcc.apb1);
     let mut spi_flash = spiflash::SPIFlash::new(spi2, cs);
     */
 

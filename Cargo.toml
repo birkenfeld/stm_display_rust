@@ -20,5 +20,5 @@ cortex-m-rt = "0.6"
 cortex-m-semihosting = "0.3"
 panic-semihosting = "0.5"
 embedded-hal = "0.2"
-stm32f429 = { git = "https://github.com/birkenfeld/stm32f429", features = ["rt"] }
+stm32f429 = { version = "0.6", features = ["rt"] }
 stm32f429-hal = { git = "https://github.com/birkenfeld/stm32f429-hal", features = ["rt"] }
