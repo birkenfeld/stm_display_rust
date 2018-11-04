@@ -7,7 +7,7 @@ import math
 
 from drawlib import Display
 
-d = Display(serial.Serial(sys.argv[1], baudrate=230400))
+d = Display(serial.Serial(sys.argv[1], baudrate=115200))
 
 d.switch_graphics()
 d.clear(0)

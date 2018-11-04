@@ -78,8 +78,8 @@ impl<SPI, CS: OutputPin> SPIFlash<SPI, CS> {
         // Wait for RX completion and reset flags.
         wait_for!(DMA1.lisr: tcif3);
         assert!(!readb!(DMA1.lisr: teif3));
-        modif!(DMA1.lifcr: ctcif3 = true, cteif3 = true);
-        modif!(DMA1.hifcr: ctcif4 = true, cteif4 = true);
+        write!(DMA1.lifcr: ctcif3 = true, cteif3 = true);
+        write!(DMA1.hifcr: ctcif4 = true, cteif4 = true);
 
         // Stop transfer.
         modif!(DMA1.s3cr: en = false);
