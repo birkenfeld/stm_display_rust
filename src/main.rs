@@ -14,17 +14,18 @@ extern crate heapless;
 extern crate bresenham;
 extern crate embedded_hal as hal_base;
 #[macro_use]
-extern crate stm32f429 as stm;
-extern crate stm32f429_hal as hal;
+extern crate stm32f4;
+extern crate stm32f4xx_hal as hal;
 
+use stm32f4::stm32f429 as stm;
 use rt::ExceptionFrame;
 use heapless::spsc::Queue;
 use heapless::consts::*;
 use hal::time::*;
 use hal::timer::{Timer, Event};
+use hal::serial::{Serial, config::Config as SerialConfig};
 use hal::rcc::RccExt;
-use hal::gpio::GpioExt;
-use hal::flash::FlashExt;
+use hal::gpio::{GpioExt, Speed};
 use hal_base::digital::OutputPin;
 use core::sync::atomic::{AtomicBool, Ordering, ATOMIC_BOOL_INIT};
 
@@ -100,34 +101,33 @@ fn main() -> ! {
         .hclk(MegaHertz(168))
         .pclk1(MegaHertz(42))
         .pclk2(MegaHertz(84));
+    let clocks = rcc.cfgr.freeze();
 
     // Activate flash caches
-    write!(FLASH.acr: dcen = true, icen = true, prften = true);
-    let mut flash = peri.FLASH.constrain();
-    let clocks = rcc.cfgr.freeze(&mut flash.acr);
+    modif!(FLASH.acr: dcen = true, icen = true, prften = true);
     // let mut delay = Delay::new(pcore.SYST, clocks);
 
     // Set up pins
-    let mut gpioa = peri.GPIOA.split(&mut rcc.ahb1);
-    let mut gpiob = peri.GPIOB.split(&mut rcc.ahb1);
-    let mut gpioc = peri.GPIOC.split(&mut rcc.ahb1);
-    let mut gpiod = peri.GPIOD.split(&mut rcc.ahb1);
-    let mut gpioe = peri.GPIOE.split(&mut rcc.ahb1);
+    let gpioa = peri.GPIOA.split();
+    let gpiob = peri.GPIOB.split();
+    let gpioc = peri.GPIOC.split();
+    let gpiod = peri.GPIOD.split();
+    let gpioe = peri.GPIOE.split();
 
     // LCD enable: set it low first to avoid LCD bleed while setting up timings
-    let mut disp_on = gpioa.pa8.into_push_pull_output(&mut gpioa.moder, &mut gpioa.otyper);
+    let mut disp_on = gpioa.pa8.into_push_pull_output();
     disp_on.set_low();
 
     // LCD backlight enable
-    let mut backlight = gpiod.pd12.into_push_pull_output(&mut gpiod.moder, &mut gpiod.otyper);
+    let mut backlight = gpiod.pd12.into_push_pull_output();
     backlight.set_high();
 
     // Output pin connected to Boot0 + capacitor
-    let mut bootpin = gpiob.pb7.into_push_pull_output(&mut gpiob.moder, &mut gpiob.otyper);
+    let mut bootpin = gpiob.pb7.into_push_pull_output();
     bootpin.set_low();
 
     // Set up blinking timer
-    let mut blink_timer = Timer::tim3(peri.TIM3, Hertz(4), clocks, &mut rcc.apb1);
+    let mut blink_timer = Timer::tim3(peri.TIM3, Hertz(4), clocks);
 
     // External Flash memory via SPI
     /*
@@ -141,41 +141,41 @@ fn main() -> ! {
     */
 
     // Console UART (USART #1)
-    let utx = gpioa.pa9 .into_af7(&mut gpioa.moder, &mut gpioa.afrh);
-    let urx = gpioa.pa10.into_af7(&mut gpioa.moder, &mut gpioa.afrh);
-    let mut console_uart = hal::serial::Serial::usart1(peri.USART1, (utx, urx),
-        hal::time::Bps(115200), clocks, &mut rcc.apb2);
-    console_uart.listen(hal::serial::Event::Rxne);
-    let (console_tx, _) = console_uart.split();
+    let utx = gpioa.pa9 .into_alternate_af7();
+    let urx = gpioa.pa10.into_alternate_af7();
+    let uart = Serial::usart1(peri.USART1, (utx, urx),
+                              SerialConfig::default().baudrate(Bps(115200)),
+                              clocks).unwrap();
+    let (console_tx, _) = uart.split();
 
     // I2C EEPROM
-    let i2c_scl = gpioc.pc4.into_open_drain_output(&mut gpioc.moder, &mut gpioc.otyper);
-    let i2c_sda = gpioc.pc5.into_open_drain_output(&mut gpioc.moder, &mut gpioc.otyper);
+    let i2c_scl = gpioc.pc4.into_open_drain_output();
+    let i2c_sda = gpioc.pc5.into_open_drain_output();
     let mut eeprom = i2ceeprom::I2CEEprom::new(i2c_scl, i2c_sda);
 
     // LCD pins
-    gpioa.pa3 .into_lcd(&mut gpioa.moder, &mut gpioa.ospeedr, &mut gpioa.afrl, 0xE);
-    gpioa.pa4 .into_lcd(&mut gpioa.moder, &mut gpioa.ospeedr, &mut gpioa.afrl, 0xE);
-    gpioa.pa6 .into_lcd(&mut gpioa.moder, &mut gpioa.ospeedr, &mut gpioa.afrl, 0xE);
-    gpioa.pa11.into_lcd(&mut gpioa.moder, &mut gpioa.ospeedr, &mut gpioa.afrh, 0xE);
-    gpioa.pa12.into_lcd(&mut gpioa.moder, &mut gpioa.ospeedr, &mut gpioa.afrh, 0xE);
-    gpiob.pb0 .into_lcd(&mut gpiob.moder, &mut gpiob.ospeedr, &mut gpiob.afrl, 0x9);
-    gpiob.pb1 .into_lcd(&mut gpiob.moder, &mut gpiob.ospeedr, &mut gpiob.afrl, 0x9);
-    gpiob.pb8 .into_lcd(&mut gpiob.moder, &mut gpiob.ospeedr, &mut gpiob.afrh, 0xE);
-    gpiob.pb9 .into_lcd(&mut gpiob.moder, &mut gpiob.ospeedr, &mut gpiob.afrh, 0xE);
-    gpiob.pb10.into_lcd(&mut gpiob.moder, &mut gpiob.ospeedr, &mut gpiob.afrh, 0xE);
-    gpiob.pb11.into_lcd(&mut gpiob.moder, &mut gpiob.ospeedr, &mut gpiob.afrh, 0xE);
-    gpioc.pc6 .into_lcd(&mut gpioc.moder, &mut gpioc.ospeedr, &mut gpioc.afrl, 0xE);
-    gpioc.pc7 .into_lcd(&mut gpioc.moder, &mut gpioc.ospeedr, &mut gpioc.afrl, 0xE);
-    gpioc.pc10.into_lcd(&mut gpioc.moder, &mut gpioc.ospeedr, &mut gpioc.afrh, 0xE);
-    gpiod.pd3 .into_lcd(&mut gpiod.moder, &mut gpiod.ospeedr, &mut gpiod.afrl, 0xE);
-    gpiod.pd6 .into_lcd(&mut gpiod.moder, &mut gpiod.ospeedr, &mut gpiod.afrl, 0xE);
-    gpiod.pd10.into_lcd(&mut gpiod.moder, &mut gpiod.ospeedr, &mut gpiod.afrh, 0xE);
-    gpioe.pe11.into_lcd(&mut gpioe.moder, &mut gpioe.ospeedr, &mut gpioe.afrh, 0xE);
-    gpioe.pe12.into_lcd(&mut gpioe.moder, &mut gpioe.ospeedr, &mut gpioe.afrh, 0xE);
-    gpioe.pe13.into_lcd(&mut gpioe.moder, &mut gpioe.ospeedr, &mut gpioe.afrh, 0xE);
-    gpioe.pe14.into_lcd(&mut gpioe.moder, &mut gpioe.ospeedr, &mut gpioe.afrh, 0xE);
-    gpioe.pe15.into_lcd(&mut gpioe.moder, &mut gpioe.ospeedr, &mut gpioe.afrh, 0xE);
+    gpioa.pa3 .into_alternate_af14().set_speed(Speed::VeryHigh);
+    gpioa.pa4 .into_alternate_af14().set_speed(Speed::VeryHigh);
+    gpioa.pa6 .into_alternate_af14().set_speed(Speed::VeryHigh);
+    gpioa.pa11.into_alternate_af14().set_speed(Speed::VeryHigh);
+    gpioa.pa12.into_alternate_af14().set_speed(Speed::VeryHigh);
+    gpiob.pb0 .into_alternate_af9() .set_speed(Speed::VeryHigh);
+    gpiob.pb1 .into_alternate_af9() .set_speed(Speed::VeryHigh);
+    gpiob.pb8 .into_alternate_af14().set_speed(Speed::VeryHigh);
+    gpiob.pb9 .into_alternate_af14().set_speed(Speed::VeryHigh);
+    gpiob.pb10.into_alternate_af14().set_speed(Speed::VeryHigh);
+    gpiob.pb11.into_alternate_af14().set_speed(Speed::VeryHigh);
+    gpioc.pc6 .into_alternate_af14().set_speed(Speed::VeryHigh);
+    gpioc.pc7 .into_alternate_af14().set_speed(Speed::VeryHigh);
+    gpioc.pc10.into_alternate_af14().set_speed(Speed::VeryHigh);
+    gpiod.pd3 .into_alternate_af14().set_speed(Speed::VeryHigh);
+    gpiod.pd6 .into_alternate_af14().set_speed(Speed::VeryHigh);
+    gpiod.pd10.into_alternate_af14().set_speed(Speed::VeryHigh);
+    gpioe.pe11.into_alternate_af14().set_speed(Speed::VeryHigh);
+    gpioe.pe12.into_alternate_af14().set_speed(Speed::VeryHigh);
+    gpioe.pe13.into_alternate_af14().set_speed(Speed::VeryHigh);
+    gpioe.pe14.into_alternate_af14().set_speed(Speed::VeryHigh);
+    gpioe.pe15.into_alternate_af14().set_speed(Speed::VeryHigh);
 
     // Enable clocks
     modif!(RCC.apb2enr: ltdcen = true);
@@ -280,6 +280,7 @@ fn main() -> ! {
     }
 
     // Activate USART receiver
+    modif!(USART1.cr1: rxneie = true);
     nvic.enable(stm::Interrupt::USART1);
 
     // Main loop: process input from UART
