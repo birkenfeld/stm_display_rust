@@ -11,17 +11,14 @@ codegen-units = 1
 debug = true
 
 [dependencies]
-nb = "0.1"
-heapless = { version = "0.4", features = ["const-fn", "smaller-atomics"] }
-btoi = { version = "0.4", default-features = false }
-bresenham = "0.1"
-cortex-m = "0.5"
-cortex-m-rt = "0.6"
-cortex-m-semihosting = "0.3"
-panic-semihosting = "0.5"
-embedded-hal = "0.2"
-stm32f4 = "0.4"
-stm32f4xx-hal = { path = "../ext/stm32f4xx-hal", features = ["stm32f429", "rt"] }
-
-#[patch.crates-io]
-#stm32f4 = "0.4"
+nb = "0.1.1"
+heapless = { version = "0.4.0", features = ["const-fn", "smaller-atomics"] }
+btoi = { version = "0.4.0", default-features = false }
+bresenham = "0.1.1"
+cortex-m = "0.5.8"
+cortex-m-rt = "0.6.6"
+cortex-m-semihosting = "0.3.2"
+panic-semihosting = "0.5.1"
+embedded-hal = "0.2.2"
+stm32f4 = "0.4.0"
+stm32f4xx-hal = { version = "0.2.6", features = ["rt", "stm32f429"] }
