@@ -1,17 +1,22 @@
 #![no_main]
 #![no_std]
 #![feature(nll)]
+#![allow(unused)]
 
 #[macro_use]
 extern crate cortex_m_rt as rt;
 extern crate cortex_m as arm;
+#[macro_use]
 extern crate cortex_m_semihosting as sh;
 extern crate panic_semihosting;
-// #[macro_use]
+#[macro_use]
 extern crate nb;
 extern crate btoi;
 extern crate heapless;
 extern crate bresenham;
+#[macro_use]
+extern crate derive_new;
+extern crate bit_field;
 extern crate embedded_hal as hal_base;
 #[macro_use]
 extern crate stm32f4;
@@ -27,23 +32,19 @@ use hal::serial::{Serial, config::Config as SerialConfig};
 use hal::rcc::RccExt;
 use hal::gpio::{GpioExt, Speed};
 use hal_base::digital::OutputPin;
-use core::sync::atomic::{AtomicBool, Ordering, ATOMIC_BOOL_INIT};
-
-// use sh::hio;
-// use core::fmt::Write;
+use core::sync::atomic::{AtomicBool, ATOMIC_BOOL_INIT};
+use hal_base::prelude::*;
 
 #[macro_use]
 mod util;
-mod icon;
+mod timer;
 mod i2ceeprom;
-mod spiflash;
-mod interface;
 mod framebuf;
-mod console;
+mod phytron;
+mod keypad;
+mod states;
 
-use console::Console;
 use framebuf::FrameBuffer;
-use interface::Action;
 
 /// Width and height of visible screen.
 const WIDTH: u16 = 480;
@@ -75,12 +76,6 @@ const FB_GRAPHICS_SIZE: usize = (WIDTH as usize) * (HEIGHT as usize);
 #[link_section = ".sram1bss"]
 static mut FB_GRAPHICS: [u8; FB_GRAPHICS_SIZE] = [0; FB_GRAPHICS_SIZE];
 
-// Console framebuffer
-// Size includes one extra row for scrolling via DMA
-const FB_CONSOLE_SIZE: usize = (WIDTH as usize) * ((HEIGHT + CHARH) as usize);
-#[link_section = ".sram3bss"]
-static mut FB_CONSOLE: [u8; FB_CONSOLE_SIZE] = [0; FB_CONSOLE_SIZE];
-
 // Cursor framebuffer: just the cursor itself
 const CURSOR_COLOR: u8 = 127;
 static CURSORBUF: [u8; CHARW as usize] = [CURSOR_COLOR; CHARW as usize];
@@ -88,10 +83,28 @@ static CURSOR_ENABLED: AtomicBool = ATOMIC_BOOL_INIT;
 
 // UART receive buffer
 static mut UART_RX: Queue<u8, U1024, u16> = Queue::u16();
+type UartConsumer<'c> = heapless::spsc::Consumer<'c, u8, U1024, u16>;
+
+pub fn get_lut_colors() -> impl Iterator<Item=(u8, u8, u8)> {
+    let basic_16 = (0..16).map(|v| {
+        let b = (v & 4 != 0) as u8;
+        let g = (v & 2 != 0) as u8;
+        let r = (v & 1 != 0) as u8;
+        let i = (v & 8 != 0) as u8;
+        (0x55*(r<<1 | i), 0x55*(g<<1 | i), 0x55*(b<<1 | i))
+    });
+    let colorcube = (0..6).flat_map(move |r| {
+        (0..6).flat_map(move |g| {
+            (0..6).map(move |b| (0x33*r, 0x33*g, 0x33*b))
+        })
+    });
+    let grayscale = (0..24).map(|g| (8+10*g, 8+10*g, 8+10*g));
+
+    basic_16.chain(colorcube).chain(grayscale)
+}
 
 #[entry]
 fn main() -> ! {
-    // let mut stdout = hio::hstdout().unwrap();
     let pcore = arm::Peripherals::take().unwrap();
     let peri = stm::Peripherals::take().unwrap();
 
@@ -126,32 +139,18 @@ fn main() -> ! {
     let mut bootpin = gpiob.pb7.into_push_pull_output();
     bootpin.set_low();
 
-    // Set up blinking timer
-    let mut blink_timer = Timer::tim3(peri.TIM3, Hertz(4), clocks);
-
-    // External Flash memory via SPI
-    /*
-    let cs = gpiob.pb12.into_push_pull_output(&mut gpiob.moder, &mut gpiob.otyper);
-    let sclk = gpiob.pb13.into_af5(&mut gpiob.moder, &mut gpiob.afrh);
-    let miso = gpiob.pb14.into_af5(&mut gpiob.moder, &mut gpiob.afrh);
-    let mosi = gpiob.pb15.into_af5(&mut gpiob.moder, &mut gpiob.afrh);
-    let spi2 = hal::spi::Spi::spi2(peri.SPI2, (sclk, miso, mosi),
-        hal_base::spi::MODE_0, MegaHertz(40), clocks, &mut rcc.apb1);
-    let mut spi_flash = spiflash::SPIFlash::new(spi2, cs);
-    */
-
-    // Console UART (USART #1)
+    // Phytron UART (USART #1)
     let utx = gpioa.pa9 .into_alternate_af7();
     let urx = gpioa.pa10.into_alternate_af7();
     let uart = Serial::usart1(peri.USART1, (utx, urx),
-                              SerialConfig::default().baudrate(Bps(115200)),
+                              SerialConfig::default().baudrate(Bps(9600)),
                               clocks).unwrap();
-    let (console_tx, _) = uart.split();
+    let (phytron_tx, _) = uart.split();
 
     // I2C EEPROM
-    let i2c_scl = gpioc.pc4.into_open_drain_output();
-    let i2c_sda = gpioc.pc5.into_open_drain_output();
-    let mut eeprom = i2ceeprom::I2CEEprom::new(i2c_scl, i2c_sda);
+    // let i2c_scl = gpioc.pc4.into_open_drain_output();
+    // let i2c_sda = gpioc.pc5.into_open_drain_output();
+    // let mut eeprom = i2ceeprom::I2CEEprom::new(i2c_scl, i2c_sda);
 
     // LCD pins
     gpioa.pa3 .into_alternate_af14().set_speed(Speed::VeryHigh);
@@ -177,7 +176,21 @@ fn main() -> ! {
     gpioe.pe14.into_alternate_af14().set_speed(Speed::VeryHigh);
     gpioe.pe15.into_alternate_af14().set_speed(Speed::VeryHigh);
 
-    // Enable clocks
+    // let mut p1  = gpioe.pe1 .into_floating_input();
+    // let mut p2  = gpioe.pe0 .into_floating_input();
+    let p3  = gpiob.pb6 .into_open_drain_output().downgrade();
+    let p4  = gpiob.pb5 .into_open_drain_output().downgrade();
+    let p5  = gpiob.pb4 .into_open_drain_output().downgrade();
+    let p6  = gpiob.pb3 .into_open_drain_output().downgrade();
+    let p7  = gpiod.pd7 .into_pull_up_input().downgrade();
+    let p8  = gpiod.pd5 .into_pull_up_input().downgrade();
+    let p9  = gpiod.pd4 .into_pull_up_input().downgrade();
+    let p10 = gpiod.pd2 .into_pull_up_input().downgrade();
+    let p11 = gpiod.pd1 .into_pull_up_input().downgrade();
+    // let mut p12 = gpiod.pd0 .into_pull_up_input().downgrade();
+    // let mut p13 = gpioc.pc12.into_floating_input();
+    // let mut p14 = gpioc.pc11.into_floating_input();
+
     modif!(RCC.apb2enr: ltdcen = true);
     modif!(RCC.ahb1enr: dma2den = true);
     // Enable PLLSAI for LTDC
@@ -215,30 +228,17 @@ fn main() -> ! {
     // Blending factors
     write!(LTDC.l1bfcr: bf1 = 4, bf2 = 5);  // Constant alpha
     // Color frame buffer start address
-    write!(LTDC.l1cfbar: cfbadd = FB_CONSOLE.as_ptr() as u32);
+    write!(LTDC.l1cfbar: cfbadd = FB_GRAPHICS.as_ptr() as u32);
     // Color frame buffer line length (active*bpp + 3), and pitch
     write!(LTDC.l1cfblr: cfbll = WIDTH + 3, cfbp = WIDTH);
     // Frame buffer number of lines
     write!(LTDC.l1cfblnr: cfblnbr = HEIGHT);
     // Set up 256-color LUT
-    for (i, (r, g, b)) in Console::get_lut_colors().enumerate() {
+    for (i, (r, g, b)) in get_lut_colors().enumerate() {
         write!(LTDC.l1clutwr: clutadd = i as u8, red = r, green = g, blue = b);
     }
 
-    // Configure layer 2 (cursor)
-
-    // Initial position: top left character
-    write!(LTDC.l2whpcr: whstpos = H_WIN_START + 1, whsppos = H_WIN_START + CHARW);
-    write!(LTDC.l2wvpcr: wvstpos = V_WIN_START + CHARH, wvsppos = V_WIN_START + CHARH);
-    write!(LTDC.l2pfcr: pf = 0b101);  // L-8 without CLUT
-    write!(LTDC.l2cacr: consta = 0xFF);
-    write!(LTDC.l2dccr: dcalpha = 0, dcred = 0, dcgreen = 0, dcblue = 0);
-    write!(LTDC.l2bfcr: bf1 = 6, bf2 = 7);  // Constant alpha * Pixel alpha
-    write!(LTDC.l2cfbar: cfbadd = CURSORBUF.as_ptr() as u32);
-    write!(LTDC.l2cfblr: cfbll = CHARW + 3, cfbp = CHARW);
-    write!(LTDC.l2cfblnr: cfblnbr = 1);  // Cursor is one line of 6 pixels
-
-    // Enable layer1, disable layer2 initially
+    // Enable layer1, disable layer2
     modif!(LTDC.l1cr: cluten = true, len = true);
     modif!(LTDC.l2cr: len = false);
 
@@ -254,72 +254,47 @@ fn main() -> ! {
     // Enable display via GPIO too
     disp_on.set_high();
 
+    // Millisecond timer
+    let timer = timer::Millis::new(peri.TIM2, clocks);
+
     // Enable interrupts
     let mut nvic = pcore.NVIC;
-    nvic.enable(stm::Interrupt::TIM3);
-    blink_timer.listen(Event::TimeOut);
-
-    let console = console::Console::new(
-        FrameBuffer::new(unsafe { &mut FB_CONSOLE }, WIDTH, HEIGHT, true),
-        console_tx
-    );
-    let mut disp = interface::DisplayState::new(
-        FrameBuffer::new(unsafe { &mut FB_GRAPHICS }, WIDTH, HEIGHT, false),
-        console
-    );
-
-    // Switch to console if nothing else programmed
-    disp.console().activate();
-
-    // Load pre-programmed startup sequence from EEPROM
-    let mut startup_buf = [0; 256];
-    if let Ok(code) = eeprom.read_stored_entry(0, 64, &mut startup_buf) {
-        for &byte in code {
-            unsafe { UART_RX.enqueue_unchecked(byte); }
-        }
-    }
 
     // Activate USART receiver
     modif!(USART1.cr1: rxneie = true);
     nvic.enable(stm::Interrupt::USART1);
 
-    // Main loop: process input from UART
-    let mut fifo = unsafe { UART_RX.split().1 };
-    loop {
-        if let Some(ch) = fifo.dequeue() {
-            match disp.process_byte(ch) {
-                Action::None => (),
-                Action::Reset => reset(pcore.SCB),
-                Action::Bootloader => reset_to_bootloader(pcore.SCB, bootpin),
-                Action::WriteEeprom(len_addr, data_addr, data) => {
-                    let _ = eeprom.write_stored_entry(len_addr, data_addr, data);
-                }
-            }
-        }
-    }
+    let mut disp = FrameBuffer::new(unsafe { &mut FB_GRAPHICS }, WIDTH, HEIGHT, false);
+
+    disp.clear(0);
+    disp.activate();
+    disp.text(&framebuf::FONTS[1], 0, 0, b"test", &[0, 8, 7, 15]);
+
+    let mut phyt = phytron::Phytron::new(phytron_tx, unsafe { UART_RX.split().1 });
+
+    let mut rows = [p7, p8, p9, p10, p11];
+    let mut cols = [p3, p4, p5, p6];
+    let mut keypad = keypad::Keypad::new(
+        &[&['f', 'F', '#', '*'],
+          &['1', '2', '3', 'u'],
+          &['4', '5', '6', 'd'],
+          &['7', '8', '9', 'e'],
+          &['<', '0', '>', 'g']],
+        &mut rows, &mut cols);
+
+    let mut res = states::Resources::new(disp, phyt, keypad, timer);
+    states::run(&mut res);
+
+    unreachable!()
 }
 
-interrupt!(TIM3, blink, state: bool = false);
-
-pub fn enable_cursor(en: bool) {
-    CURSOR_ENABLED.store(en, Ordering::Relaxed);
-}
-
-fn blink(visible: &mut bool) {
-    // Toggle layer2 on next vsync
-    *visible = !*visible;
-    modif!(LTDC.l2cr: len = bit(CURSOR_ENABLED.load(Ordering::Relaxed) && *visible));
-    write!(LTDC.srcr: vbr = true);
-    // Reset timer
-    modif!(TIM3.sr: uif = false);
-    modif!(TIM3.cr1: cen = true);
-}
 
 interrupt!(USART1, receive);
 
 fn receive() {
     let data = read!(USART1.dr: dr) as u8;
     unsafe { let _ = UART_RX.split().0.enqueue(data); }
+    // unsafe { FB_GRAPHICS[20*480 + fifo().len()] = 15; }
 }
 
 #[exception]

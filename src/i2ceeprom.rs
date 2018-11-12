@@ -13,7 +13,8 @@ pub struct I2CEEprom {
 }
 
 impl I2CEEprom {
-    pub fn new(mut scl: gpioc::PC4<Output<OpenDrain>>, mut sda: gpioc::PC5<Output<OpenDrain>>) -> Self {
+    pub fn new(mut scl: gpioc::PC4<Output<OpenDrain>>,
+               mut sda: gpioc::PC5<Output<OpenDrain>>) -> Self {
         scl.set_high();
         sda.set_high();
         Self { scl, sda }

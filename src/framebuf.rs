@@ -1,5 +1,6 @@
 //! Basic framebuffer abstraction and drawing routines.
 
+use core::fmt;
 use stm;
 use bresenham::Bresenham;
 
@@ -35,20 +36,21 @@ pub const FONTS: &[Font] = &[
 
 pub const CONSOLEFONT: &'static Font = &FONTS[0];
 
+#[derive(new)]
 pub struct FrameBuffer {
     buf: &'static mut [u8],
     width: u16,
     height: u16,
+    #[new(value = "(0, 0)")]
     clip1: (u16, u16),
+    #[new(value = "(width, height)")]
     clip2: (u16, u16),
     has_cursor: bool,
+    #[new(value = "(0, 0)")]
+    cursor: (u16, u16),
 }
 
 impl FrameBuffer {
-    pub fn new(buf: &'static mut [u8], width: u16, height: u16, has_cursor: bool) -> Self {
-        Self { buf, width, height, has_cursor, clip1: (0, 0), clip2: (width, height) }
-    }
-
     #[inline(always)]
     fn set_pixel(&mut self, x: u16, y: u16, color: u8) {
         if self.clip1.0 <= x && x < self.clip2.0 && self.clip1.1 <= y && y < self.clip2.1 {
@@ -191,10 +193,23 @@ impl FrameBuffer {
         write!(LTDC.l1cfbar: cfbadd = self.buf.as_ptr() as u32);
         // reload on next vsync
         write!(LTDC.srcr: vbr = true);
-        ::enable_cursor(self.has_cursor);
     }
 
     pub fn clear_scroll_area(&mut self) {
         for el in &mut self.buf[(self.width*self.height) as usize..] { *el = 0; }
+    }
+
+    // transitional LCD emulation
+
+    pub fn set_cursor(&mut self, x: u16, y: u16) {
+        self.cursor = (x, y);
+    }
+}
+
+impl fmt::Write for FrameBuffer {
+    fn write_str(&mut self, s: &str) -> Result<(), fmt::Error> {
+        self.text(&FONTS[1], 20 + self.cursor.0*8, 20 + self.cursor.1*16, s.as_bytes(), &[0, 8, 7, 15]);
+        self.cursor.0 += s.len() as u16;
+        Ok(())
     }
 }
