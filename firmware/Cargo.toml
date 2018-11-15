@@ -33,4 +33,5 @@ path = "../lib"
 [features]
 test-mode = ["display/test-mode"]
 customer-mlz = ["display/customer-mlz"]
+customer-psi = ["display/customer-psi"]
 default = ["customer-mlz"]
