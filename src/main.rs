@@ -74,6 +74,9 @@ static CURSOR_ENABLED: AtomicBool = ATOMIC_BOOL_INIT;
 // UART receive buffer
 static mut UART_RX: Queue<u8, U1024, u16> = Queue::u16();
 
+// Touch event buffer
+static mut TOUCH_EVT: Queue<u16, U16, u8> = Queue::u8();
+
 #[cortex_m_rt::entry]
 fn main() -> ! {
     // let mut stdout = hio::hstdout().unwrap();
@@ -113,6 +116,9 @@ fn main() -> ! {
 
     // Set up blinking timer
     let mut blink_timer = Timer::tim3(peri.TIM3, Hertz(4), clocks);
+
+    // Set up touch detection timer
+    let mut touch_timer = Timer::tim4(peri.TIM4, Hertz(100), clocks);
 
     // External Flash memory via SPI
     /*
@@ -161,6 +167,24 @@ fn main() -> ! {
     gpioe.pe13.into_alternate_af14().set_speed(Speed::VeryHigh);
     gpioe.pe14.into_alternate_af14().set_speed(Speed::VeryHigh);
     gpioe.pe15.into_alternate_af14().set_speed(Speed::VeryHigh);
+
+    // Pins for touch screen
+    let _touch_yd = gpioc.pc0.into_pull_down_input();
+    let _touch_yu = gpioc.pc1.into_floating_input();  // LATER: analog
+    let mut touch_xl = gpioc.pc2.into_push_pull_output();
+    touch_xl.set_low();
+    let mut touch_xr = gpioc.pc3.into_push_pull_output();
+    touch_xr.set_high();
+
+    // Set yu input pin to analog mode.  Hardcoded for now!
+    modif!(GPIOC.moder: moder1 = 0b11);
+
+    // Activate and configure ADC.
+    modif!(RCC.apb2enr: adc1en = true);
+    // One conversion of channel 11, continuous mode.
+    write!(ADC1.sqr1: l = 0);
+    write!(ADC1.sqr3: sq1 = 11);
+    write!(ADC1.cr2: cont = true, adon = true, swstart = true);
 
     // Enable clocks
     modif!(RCC.apb2enr: ltdcen = true);
@@ -242,7 +266,9 @@ fn main() -> ! {
     // Enable interrupts
     let mut nvic = pcore.NVIC;
     nvic.enable(stm::Interrupt::TIM3);
+    nvic.enable(stm::Interrupt::TIM4);
     blink_timer.listen(Event::TimeOut);
+    touch_timer.listen(Event::TimeOut);
 
     let console = console::Console::new(
         FrameBuffer::new(unsafe { &mut FB_CONSOLE }, WIDTH, HEIGHT, true),
@@ -270,7 +296,19 @@ fn main() -> ! {
 
     // Main loop: process input from UART
     let mut fifo = unsafe { UART_RX.split().1 };
+    let mut touch = unsafe { TOUCH_EVT.split().1 };
     loop {
+        if let Some(mut te) = touch.dequeue() {
+            let mut c = [b'0'; 4];
+            for p in c.iter_mut().rev() {
+                *p += te as u8 % 10;
+                te /= 10;
+            }
+            for p in &c {
+                disp.process_byte(*p);
+            }
+            disp.process_byte(b' ');
+        }
         if let Some(ch) = fifo.dequeue() {
             match disp.process_byte(ch) {
                 Action::None => (),
@@ -305,6 +343,31 @@ stm32f4::interrupt!(USART1, receive);
 fn receive() {
     let data = read!(USART1.dr: dr) as u8;
     unsafe { let _ = UART_RX.split().0.enqueue(data); }
+}
+
+const THRESHOLD: u32 = 1000;
+const NSAMPLES: usize = 32;
+
+struct TouchState {
+    last: bool,
+    data: [u16; NSAMPLES],
+    idx: usize,
+}
+
+stm32f4::interrupt!(TIM4, touch_detect, state: TouchState =
+                    TouchState { last: false, data: [0; NSAMPLES], idx: 0});
+
+fn touch_detect(state: &mut TouchState) {
+    let data = read!(ADC1.dr: data);
+    state.data[state.idx] = data;
+    state.idx = (state.idx + 1) % NSAMPLES;
+    let mean = state.data.iter().map(|&v| v as u32).sum::<u32>() / NSAMPLES as u32;
+    if !state.last && mean > THRESHOLD {
+        unsafe { let _ = TOUCH_EVT.split().0.enqueue(mean as u16); }
+        state.last = true;
+    } else if state.last && mean < THRESHOLD {
+        state.last = false;
+    }
 }
 
 #[cortex_m_rt::exception]
