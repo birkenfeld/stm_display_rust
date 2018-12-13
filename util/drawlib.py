@@ -1,5 +1,8 @@
 #!/usr/bin/env python3
 
+import sys
+assert sys.version_info[0] == 3
+
 CMD_MODE_GRAPHICS = 0x20
 CMD_MODE_CONSOLE = 0x21
 
