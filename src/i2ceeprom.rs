@@ -3,7 +3,7 @@
 
 use arm;
 use hal::gpio::{gpioc, Output, OpenDrain};
-use hal_base::digital::{InputPin, OutputPin};
+use embedded_hal::digital::{InputPin, OutputPin};
 
 pub type Result<T> = core::result::Result<T, ()>;
 

@@ -1,6 +1,6 @@
 //! Basic framebuffer abstraction and drawing routines.
 
-use stm;
+use crate::stm;
 use bresenham::Bresenham;
 
 pub type Colors = [u8; 4];
@@ -191,7 +191,7 @@ impl FrameBuffer {
         write!(LTDC.l1cfbar: cfbadd = self.buf.as_ptr() as u32);
         // reload on next vsync
         write!(LTDC.srcr: vbr = true);
-        ::enable_cursor(self.has_cursor);
+        crate::enable_cursor(self.has_cursor);
     }
 
     pub fn clear_scroll_area(&mut self) {

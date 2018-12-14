@@ -1,8 +1,8 @@
 //! Communication with the SPI flash using DMA.
 #![allow(unused)]
 
-use stm;
-use hal_base::digital::OutputPin;
+use crate::stm;
+use embedded_hal::digital::OutputPin;
 
 #[link_section = ".sram1bss"]
 static mut DMABUF: [u8; 1029] = [0; 1029];

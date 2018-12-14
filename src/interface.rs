@@ -1,8 +1,8 @@
 //! The command interface to a client.
 
-use icon::ICONS;
-use console::Console;
-use framebuf::{FONTS, FrameBuffer};
+use crate::icon::ICONS;
+use crate::console::Console;
+use crate::framebuf::{FONTS, FrameBuffer};
 
 const CMD_MODE_GRAPHICS: u8 = 0x20;
 const CMD_MODE_CONSOLE:  u8 = 0x21;

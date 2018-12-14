@@ -1,12 +1,12 @@
 //! The console display
 
-use stm;
+use crate::stm;
 use hal::serial::Tx;
 // use hal_base::prelude::*;
 use btoi::btoi;
 
-use framebuf::{CONSOLEFONT, Colors, FrameBuffer};
-use ::{WIDTH, HEIGHT, CHARW, CHARH, H_WIN_START, V_WIN_START};
+use crate::framebuf::{CONSOLEFONT, Colors, FrameBuffer};
+use crate::{WIDTH, HEIGHT, CHARW, CHARH, H_WIN_START, V_WIN_START};
 
 const DEFAULT_COLOR: u8 = 7;
 const DEFAULT_BKGRD: u8 = 0;

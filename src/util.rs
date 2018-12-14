@@ -1,7 +1,7 @@
 //! Utility macros/functions.
 
 use hal::delay::Delay;
-use hal_base::prelude::*;
+use embedded_hal::prelude::*;
 
 pub trait DelayExt {
     fn delay(&mut self, ms: u32);

@@ -1,24 +1,9 @@
 #![no_main]
 #![no_std]
-#![feature(nll)]
 
-#[macro_use]
-extern crate cortex_m_rt as rt;
-extern crate cortex_m as arm;
-extern crate cortex_m_semihosting as sh;
-extern crate panic_semihosting;
-// #[macro_use]
-extern crate nb;
-extern crate btoi;
-extern crate heapless;
-extern crate bresenham;
-extern crate embedded_hal as hal_base;
-#[macro_use]
-extern crate stm32f4;
-extern crate stm32f4xx_hal as hal;
-
+use panic_semihosting;
 use stm32f4::stm32f429 as stm;
-use rt::ExceptionFrame;
+use cortex_m_rt::ExceptionFrame;
 use heapless::spsc::Queue;
 use heapless::consts::*;
 use hal::time::*;
@@ -26,7 +11,7 @@ use hal::timer::{Timer, Event};
 use hal::serial::{Serial, config::Config as SerialConfig};
 use hal::rcc::RccExt;
 use hal::gpio::{GpioExt, Speed};
-use hal_base::digital::OutputPin;
+use embedded_hal::digital::OutputPin;
 use core::sync::atomic::{AtomicBool, Ordering, ATOMIC_BOOL_INIT};
 
 // use sh::hio;
@@ -41,9 +26,9 @@ mod interface;
 mod framebuf;
 mod console;
 
-use console::Console;
-use framebuf::FrameBuffer;
-use interface::Action;
+use crate::console::Console;
+use crate::framebuf::FrameBuffer;
+use crate::interface::Action;
 
 /// Width and height of visible screen.
 const WIDTH: u16 = 480;
@@ -89,7 +74,7 @@ static CURSOR_ENABLED: AtomicBool = ATOMIC_BOOL_INIT;
 // UART receive buffer
 static mut UART_RX: Queue<u8, U1024, u16> = Queue::u16();
 
-#[entry]
+#[cortex_m_rt::entry]
 fn main() -> ! {
     // let mut stdout = hio::hstdout().unwrap();
     let pcore = arm::Peripherals::take().unwrap();
@@ -299,7 +284,7 @@ fn main() -> ! {
     }
 }
 
-interrupt!(TIM3, blink, state: bool = false);
+stm32f4::interrupt!(TIM3, blink, state: bool = false);
 
 pub fn enable_cursor(en: bool) {
     CURSOR_ENABLED.store(en, Ordering::Relaxed);
@@ -315,19 +300,19 @@ fn blink(visible: &mut bool) {
     modif!(TIM3.cr1: cen = true);
 }
 
-interrupt!(USART1, receive);
+stm32f4::interrupt!(USART1, receive);
 
 fn receive() {
     let data = read!(USART1.dr: dr) as u8;
     unsafe { let _ = UART_RX.split().0.enqueue(data); }
 }
 
-#[exception]
+#[cortex_m_rt::exception]
 fn HardFault(ef: &ExceptionFrame) -> ! {
     panic!("HardFault at {:#?}", ef);
 }
 
-#[exception]
+#[cortex_m_rt::exception]
 fn DefaultHandler(irqn: i16) {
     panic!("Unhandled exception (IRQn = {})", irqn);
 }
