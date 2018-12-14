@@ -4,6 +4,8 @@ use crate::icon::ICONS;
 use crate::console::Console;
 use crate::framebuf::{FONTS, FrameBuffer};
 
+const ESCAPE:            u8 = 0x1b;
+
 const CMD_MODE_GRAPHICS: u8 = 0x20;
 const CMD_MODE_CONSOLE:  u8 = 0x21;
 
@@ -19,6 +21,8 @@ const CMD_ICON:          u8 = 0x43;
 const CMD_TEXT:          u8 = 0x44;
 const CMD_COPYRECT:      u8 = 0x45;
 const CMD_PLOT:          u8 = 0x46;
+
+const CMD_TOUCH:         u8 = 0x50;  // only for replies
 
 const CMD_SAVE_ATTRS:    u8 = 0xa0;
 const CMD_SAVE_ATTRS_MAX:u8 = 0xbf;
@@ -85,7 +89,7 @@ impl DisplayState {
     pub fn process_byte(&mut self, ch: u8) -> Action {
         match self.escape {
             Escape::None => {
-                if ch == b'\x1b' {
+                if ch == ESCAPE {
                     self.escape = Escape::SawOne;
                 } else {
                     self.con.process_char(ch);
@@ -94,7 +98,7 @@ impl DisplayState {
             Escape::SawOne => {
                 self.escape = if ch == b'[' {
                     Escape::Console(0)
-                } else if ch == b'\x1b' {
+                } else if ch == ESCAPE {
                     Escape::Graphics(0, 0)
                 } else {
                     Escape::None
@@ -132,6 +136,10 @@ impl DisplayState {
             }
         }
         Action::None
+    }
+
+    pub fn process_touch(&mut self, x: u8, y: u8) {
+        self.con.write_to_host(&[ESCAPE, ESCAPE, 0x03, CMD_TOUCH, x, y]);
     }
 
     pub fn process_command(&mut self, len: usize) -> Action {
@@ -224,7 +232,7 @@ impl DisplayState {
                 return Action::WriteEeprom(0, 64, &cmd[2..]);
             }
             CMD_IDENT => {
-                self.con.write_to_host(&[0x1b, 0x1b, 0x04]);
+                self.con.write_to_host(&[0x1b, 0x1b, 0x05, 0xf3]);
                 self.con.write_to_host(&crate::IDENT);
             }
             _ => {}

@@ -298,16 +298,8 @@ fn main() -> ! {
     let mut fifo = unsafe { UART_RX.split().1 };
     let mut touch = unsafe { TOUCH_EVT.split().1 };
     loop {
-        if let Some(mut te) = touch.dequeue() {
-            let mut c = [b'0'; 4];
-            for p in c.iter_mut().rev() {
-                *p += te as u8 % 10;
-                te /= 10;
-            }
-            for p in &c {
-                disp.process_byte(*p);
-            }
-            disp.process_byte(b' ');
+        if let Some(y) = touch.dequeue() {
+            disp.process_touch(0, (y >> 4) as u8);
         }
         if let Some(ch) = fifo.dequeue() {
             match disp.process_byte(ch) {
