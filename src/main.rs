@@ -14,9 +14,6 @@ use hal::gpio::{GpioExt, Speed};
 use embedded_hal::digital::OutputPin;
 use core::sync::atomic::{AtomicBool, Ordering, ATOMIC_BOOL_INIT};
 
-// use sh::hio;
-// use core::fmt::Write;
-
 #[macro_use]
 mod util;
 mod icon;
@@ -29,6 +26,9 @@ mod console;
 use crate::console::Console;
 use crate::framebuf::FrameBuffer;
 use crate::interface::Action;
+
+/// Reply to host's identify query.
+const IDENT: [u8; 4] = [0x00, 0x00, 0x01, 0x00];
 
 /// Width and height of visible screen.
 const WIDTH: u16 = 480;
