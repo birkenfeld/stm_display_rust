@@ -2,7 +2,7 @@
 
 use crate::stm;
 use hal::serial::Tx;
-// use hal_base::prelude::*;
+use embedded_hal::serial::Write;
 use btoi::btoi;
 
 use crate::framebuf::{CONSOLEFONT, Colors, FrameBuffer};
@@ -19,7 +19,6 @@ const HEX: &[u8] = b"0123456789ABCDEF";
 
 pub struct Console {
     fb: FrameBuffer,
-    #[allow(unused)]
     tx: Tx<stm::USART1>,
     color: Colors,
     cx: u16,
@@ -31,6 +30,12 @@ impl Console {
         fb.clear(0);
         fb.clear_scroll_area();
         Self { fb, tx, color: [DEFAULT_BKGRD, 0, 0, DEFAULT_COLOR], cx: 0, cy: 0 }
+    }
+
+    pub fn write_to_host(&mut self, bytes: &[u8]) {
+        for &byte in bytes {
+            let _ = nb::block!(self.tx.write(byte));
+        }
     }
 
     pub fn activate(&self) {
@@ -94,8 +99,6 @@ impl Console {
             }
         }
         self.position_cursor();
-        // Echo back to sender
-        // block!(self.tx.write(ch)).unwrap();
     }
 
     pub fn process_escape(&mut self, end: u8, seq: &[u8]) {

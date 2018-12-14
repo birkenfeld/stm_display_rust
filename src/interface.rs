@@ -29,6 +29,7 @@ const CMD_SEL_ATTRS_MAX: u8 = 0xdf;
 const CMD_BOOTMODE:      u8 = 0xf0;
 const CMD_RESET:         u8 = 0xf1;
 const CMD_SET_STARTUP:   u8 = 0xf2;
+const CMD_IDENT:         u8 = 0xf3;
 
 const RESET_MAGIC:    &[u8] = &[0xcb, 0xef, 0x20, 0x18];
 
@@ -221,6 +222,10 @@ impl DisplayState {
             },
             CMD_SET_STARTUP => {
                 return Action::WriteEeprom(0, 64, &cmd[2..]);
+            }
+            CMD_IDENT => {
+                self.con.write_to_host(&[0x1b, 0x1b, 0x04]);
+                self.con.write_to_host(&crate::IDENT);
             }
             _ => {}
         }
