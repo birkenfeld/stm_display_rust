@@ -181,10 +181,14 @@ fn main() -> ! {
 
     // Activate and configure ADC.
     modif!(RCC.apb2enr: adc1en = true);
+    modif!(RCC.apb2rstr: adcrst = true);
+    modif!(RCC.apb2rstr: adcrst = false);
     // One conversion of channel 11, continuous mode.
     write!(ADC1.sqr1: l = 0);
     write!(ADC1.sqr3: sq1 = 11);
-    write!(ADC1.cr2: cont = true, adon = true, swstart = true);
+    write!(ADC1.cr1: awden = true);
+    write!(ADC1.cr2: cont = true, adon = true);
+    modif!(ADC1.cr2: swstart = true);
 
     // Enable clocks
     modif!(RCC.apb2enr: ltdcen = true);
@@ -337,8 +341,8 @@ fn receive() {
     unsafe { let _ = UART_RX.split().0.enqueue(data); }
 }
 
-const THRESHOLD: u32 = 1000;
-const NSAMPLES: usize = 32;
+const THRESHOLD: u16 = 500;
+const NSAMPLES: usize = 8;
 
 struct TouchState {
     last: bool,
@@ -353,13 +357,17 @@ fn touch_detect(state: &mut TouchState) {
     let data = read!(ADC1.dr: data);
     state.data[state.idx] = data;
     state.idx = (state.idx + 1) % NSAMPLES;
-    let mean = state.data.iter().map(|&v| v as u32).sum::<u32>() / NSAMPLES as u32;
-    if !state.last && mean > THRESHOLD {
+    let mini = state.data.iter().cloned().min().unwrap();
+    if !state.last && mini > THRESHOLD {
+        let mean = state.data.iter().map(|&v| v as u32).sum::<u32>() / NSAMPLES as u32;
         unsafe { let _ = TOUCH_EVT.split().0.enqueue(mean as u16); }
         state.last = true;
-    } else if state.last && mean < THRESHOLD {
+    } else if state.last && mini < THRESHOLD {
         state.last = false;
     }
+    // Reset timer
+    modif!(TIM4.sr: uif = false);
+    modif!(TIM4.cr1: cen = true);
 }
 
 #[cortex_m_rt::exception]

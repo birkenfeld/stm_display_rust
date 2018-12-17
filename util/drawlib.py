@@ -19,6 +19,8 @@ CMD_TEXT = 0x44
 CMD_COPYRECT = 0x45
 CMD_PLOT = 0x46
 
+CMD_TOUCH = 0x50
+
 CMD_SAVE_ATTRS = 0xa0
 CMD_SAVE_ATTRS_MAX = 0xbf
 
@@ -28,6 +30,7 @@ CMD_SEL_ATTRS_MAX = 0xdf
 CMD_BOOTMODE = 0xf0
 CMD_RESET = 0xf1
 CMD_SET_STARTUP = 0xf2
+CMD_VERSION = 0xf3
 
 RESET_MAGIC = bytes([0xcb, 0xef, 0x20, 0x18])
 
@@ -58,6 +61,23 @@ class Display:
 
     def _reset(self):
         self.send(CMD_RESET, RESET_MAGIC)
+
+    def get_version(self):
+        self.send(CMD_VERSION)
+        rsp = self.port.read(8)
+        assert rsp[:4] == b'\x1b\x1b\x05%c' % CMD_VERSION
+        return list(rsp[4:])
+
+    def touch_detect(self):
+        rsp = self.port.read(6)
+        if not rsp:
+            return None
+        assert rsp[:4] == b'\x1b\x1b\x03%c' % CMD_TOUCH
+        return (rsp[4], rsp[5])
+
+    def touch_detect_loop(self):
+        while True:
+            print('Touch:', *self.touch_detect())
 
     def record_startup(self):
         self._record = []
