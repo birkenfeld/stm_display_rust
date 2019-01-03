@@ -1,7 +1,9 @@
 #![no_main]
 #![no_std]
 
-use panic_semihosting;
+#[allow(unused_imports)]
+use panic_semihosting;  // needed for panic haner
+
 use stm32f4::stm32f429 as stm;
 use cortex_m_rt::ExceptionFrame;
 use heapless::spsc::Queue;
