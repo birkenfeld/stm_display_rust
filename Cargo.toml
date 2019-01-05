@@ -14,7 +14,6 @@ debug = true
 [dependencies]
 nb = "0.1.1"
 arraydeque = { version = "0.4", default-features = false }
-heapless = { version = "0.4.0", features = ["const-fn", "smaller-atomics"] }
 btoi = { version = "0.4.0", default-features = false }
 bresenham = "0.1.1"
 arm = { package = "cortex-m", version = "0.5.8" }
