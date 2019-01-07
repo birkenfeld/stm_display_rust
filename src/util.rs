@@ -43,26 +43,20 @@ macro_rules! wait_for {
 }
 
 #[macro_export]
-macro_rules! spi_cmd {
-    ($spi:expr, $t:expr, $cs:expr, $ds:expr, $cmd:expr) => {
-        $ds.set_low();
+macro_rules! ili_cmd {
+    ($spi:expr, $cs:expr, $ds:expr, $cmd:expr) => {
         $cs.set_low();
-        spi_cmd!(@send $spi, $t, $cmd);
+        $ds.set_low();
+        $spi.write(&[$cmd]).unwrap();
         $cs.set_high();
     };
-    ($spi:expr, $t:expr, $cs:expr, $ds:expr, $cmd:expr, $($data:tt)+) => {
-        $ds.set_low();
+    ($spi:expr, $cs:expr, $ds:expr, $cmd:expr, $($data:tt)+) => {
         $cs.set_low();
-        spi_cmd!(@send $spi, $t, $cmd);
+        $ds.set_low();
+        $spi.write(&[$cmd]).unwrap();
         $ds.set_high();
-        spi_cmd!(@send $spi, $t, $($data)+);
+        $spi.write(&[$($data)+]).unwrap();
         $ds.set_low();
         $cs.set_high();
-    };
-    (@send $spi:expr, $t:expr, $($byte:expr),+) => {
-        $(
-            block!($spi.send($byte)).unwrap();
-            $t.delay_us(7u16);
-        )+
     };
 }

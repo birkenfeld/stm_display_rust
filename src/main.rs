@@ -68,8 +68,8 @@ fn main() -> ! {
     let clocks = rcc.cfgr.freeze();
     let mut time = Delay::new(pcore.SYST, clocks);
 
-    // activate flash caches
-    write!(FLASH.acr: dcen = true, icen = true, prften = true);
+    // activate flash caches (not working on Discovery?)
+    // write!(FLASH.acr: dcen = true, icen = true, prften = true);
 
     // set up pins
     let gpioa = peri.GPIOA.split();
@@ -232,15 +232,14 @@ fn main() -> ! {
     write!(LTDC.srcr: imr = true);
 
     // Initialize LCD controller
-    cs.set_high();
-    spi_cmd!(display_spi, time, cs, ds, ILI9341_RESET);
+    ili_cmd!(display_spi, cs, ds, ILI9341_RESET);
     time.delay_ms(5u16);
-    spi_cmd!(display_spi, time, cs, ds, ILI9341_MAC, 0xC0);
-    spi_cmd!(display_spi, time, cs, ds, ILI9341_RGB_INTERFACE, 0xC2);
-    spi_cmd!(display_spi, time, cs, ds, ILI9341_INTERFACE, 0x01, 0x00, 0x06);
-    spi_cmd!(display_spi, time, cs, ds, ILI9341_SLEEP_OUT);
+    ili_cmd!(display_spi, cs, ds, ILI9341_MAC, 0xC0);
+    ili_cmd!(display_spi, cs, ds, ILI9341_RGB_INTERFACE, 0xC2);
+    ili_cmd!(display_spi, cs, ds, ILI9341_INTERFACE, 0x01, 0x00, 0x06);
+    ili_cmd!(display_spi, cs, ds, ILI9341_SLEEP_OUT);
     time.delay_ms(60u16);
-    spi_cmd!(display_spi, time, cs, ds, ILI9341_DISPLAY_ON);
+    ili_cmd!(display_spi, cs, ds, ILI9341_DISPLAY_ON);
 
     // enable interrupts
     let mut nvic = pcore.NVIC;
