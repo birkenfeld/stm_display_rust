@@ -6,7 +6,7 @@ use panic_semihosting;  // needed for panic haner
 
 use stm32f4::stm32f429 as stm;
 use cortex_m_rt::ExceptionFrame;
-use heapless::spsc::Queue;
+use heapless::spsc::{SingleCore, Queue};
 use heapless::consts::*;
 use hal::time::*;
 use hal::timer::{Timer, Event};
@@ -74,7 +74,7 @@ static CURSORBUF: [u8; CHARW as usize] = [CURSOR_COLOR; CHARW as usize];
 static CURSOR_ENABLED: AtomicBool = ATOMIC_BOOL_INIT;
 
 // UART receive buffer
-static mut UART_RX: Queue<u8, U1024, u16> = Queue::u16();
+static mut UART_RX: Queue<u8, U1024, u16, SingleCore> = unsafe { Queue::u16_sc() };
 
 #[cortex_m_rt::entry]
 fn main() -> ! {
