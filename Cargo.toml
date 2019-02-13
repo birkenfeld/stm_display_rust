@@ -13,7 +13,6 @@ debug = true
 
 [dependencies]
 nb = "0.1.1"
-heapless = { version = "0.4.0", features = ["const-fn", "smaller-atomics"] }
 btoi = { version = "0.4.0", default-features = false }
 bresenham = "0.1.1"
 arm = { package = "cortex-m", version = "0.5.8" }
@@ -21,5 +20,15 @@ cortex-m-rt = "0.6.6"
 cortex-m-semihosting = "0.3.2"
 panic-semihosting = "0.5.1"
 embedded-hal = "0.2.2"
-stm32f4 = "0.4.0"
-hal = { package = "stm32f4xx-hal", version = "0.2.6", features = ["rt", "stm32f429"] }
+stm32f4 = "0.6.0"
+
+[dependencies.heapless]
+git = "https://github.com/japaric/heapless"
+rev = "9588c8554db9e6a09d0c780b328e79f5f78544df"
+features = ["const-fn", "smaller-atomics"]
+
+[dependencies.hal]
+package = "stm32f4xx-hal"
+git = "https://github.com/therealprof/stm32f4xx-hal"
+rev = "68f8191cc4e74d55a8508189bf0088884a810b2c"
+features = ["rt", "stm32f429"]

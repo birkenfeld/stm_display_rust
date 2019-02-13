@@ -1,8 +1,9 @@
 #![no_main]
 #![no_std]
 
-use panic_semihosting;
+extern crate panic_semihosting;
 use stm32f4::stm32f429 as stm;
+use stm::interrupt;
 use cortex_m_rt::ExceptionFrame;
 use heapless::spsc::Queue;
 use heapless::consts::*;
@@ -12,7 +13,7 @@ use hal::serial::{Serial, config::Config as SerialConfig};
 use hal::rcc::RccExt;
 use hal::gpio::{GpioExt, Speed};
 use embedded_hal::digital::OutputPin;
-use core::sync::atomic::{AtomicBool, Ordering, ATOMIC_BOOL_INIT};
+use core::sync::atomic::{AtomicBool, Ordering};
 
 #[macro_use]
 mod util;
@@ -69,7 +70,7 @@ static mut FB_CONSOLE: [u8; FB_CONSOLE_SIZE] = [0; FB_CONSOLE_SIZE];
 // Cursor framebuffer: just the cursor itself
 const CURSOR_COLOR: u8 = 127;
 static CURSORBUF: [u8; CHARW as usize] = [CURSOR_COLOR; CHARW as usize];
-static CURSOR_ENABLED: AtomicBool = ATOMIC_BOOL_INIT;
+static CURSOR_ENABLED: AtomicBool = AtomicBool::new(false);
 
 // UART receive buffer
 static mut UART_RX: Queue<u8, U1024, u16> = Queue::u16();
@@ -318,25 +319,24 @@ fn main() -> ! {
     }
 }
 
-stm32f4::interrupt!(TIM3, blink, state: bool = false);
-
 pub fn enable_cursor(en: bool) {
     CURSOR_ENABLED.store(en, Ordering::Relaxed);
 }
 
-fn blink(visible: &mut bool) {
+#[stm::interrupt]
+fn TIM3() {
+    static mut VISIBLE: bool = false;
     // Toggle layer2 on next vsync
-    *visible = !*visible;
-    modif!(LTDC.l2cr: len = bit(CURSOR_ENABLED.load(Ordering::Relaxed) && *visible));
+    *VISIBLE = !*VISIBLE;
+    modif!(LTDC.l2cr: len = bit(CURSOR_ENABLED.load(Ordering::Relaxed) && *VISIBLE));
     write!(LTDC.srcr: vbr = true);
     // Reset timer
     modif!(TIM3.sr: uif = false);
     modif!(TIM3.cr1: cen = true);
 }
 
-stm32f4::interrupt!(USART1, receive);
-
-fn receive() {
+#[stm::interrupt]
+fn USART1() {
     let data = read!(USART1.dr: dr) as u8;
     unsafe { let _ = UART_RX.split().0.enqueue(data); }
 }
@@ -350,20 +350,19 @@ struct TouchState {
     idx: usize,
 }
 
-stm32f4::interrupt!(TIM4, touch_detect, state: TouchState =
-                    TouchState { last: false, data: [0; NSAMPLES], idx: 0});
-
-fn touch_detect(state: &mut TouchState) {
+#[stm::interrupt]
+fn TIM4() {
+    static mut STATE: TouchState = TouchState { last: false, data: [0; NSAMPLES], idx: 0};
     let data = read!(ADC1.dr: data);
-    state.data[state.idx] = data;
-    state.idx = (state.idx + 1) % NSAMPLES;
-    let mini = state.data.iter().cloned().min().unwrap();
-    if !state.last && mini > THRESHOLD {
-        let mean = state.data.iter().map(|&v| v as u32).sum::<u32>() / NSAMPLES as u32;
+    STATE.data[STATE.idx] = data;
+    STATE.idx = (STATE.idx + 1) % NSAMPLES;
+    let mini = STATE.data.iter().cloned().min().unwrap();
+    if !STATE.last && mini > THRESHOLD {
+        let mean = STATE.data.iter().map(|&v| v as u32).sum::<u32>() / NSAMPLES as u32;
         unsafe { let _ = TOUCH_EVT.split().0.enqueue(mean as u16); }
-        state.last = true;
-    } else if state.last && mini < THRESHOLD {
-        state.last = false;
+        STATE.last = true;
+    } else if STATE.last && mini < THRESHOLD {
+        STATE.last = false;
     }
     // Reset timer
     modif!(TIM4.sr: uif = false);
