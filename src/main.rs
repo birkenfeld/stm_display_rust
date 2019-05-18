@@ -12,7 +12,7 @@ use hal::timer::{Timer, Event};
 use hal::serial::{Serial, config::Config as SerialConfig};
 use hal::rcc::RccExt;
 use hal::gpio::{GpioExt, Speed};
-use embedded_hal::digital::OutputPin;
+use embedded_hal::digital::v2::OutputPin;
 use core::sync::atomic::{AtomicBool, Ordering};
 
 #[macro_use]
@@ -105,15 +105,15 @@ fn main() -> ! {
 
     // LCD enable: set it low first to avoid LCD bleed while setting up timings
     let mut disp_on = gpioa.pa8.into_push_pull_output();
-    disp_on.set_low();
+    let _ = disp_on.set_low();
 
     // LCD backlight enable
     let mut backlight = gpiod.pd12.into_push_pull_output();
-    backlight.set_high();
+    let _ = backlight.set_high();
 
     // Output pin connected to Boot0 + capacitor
     let mut bootpin = gpiob.pb7.into_push_pull_output();
-    bootpin.set_low();
+    let _ = bootpin.set_low();
 
     // Set up blinking timer
     let mut blink_timer = Timer::tim3(peri.TIM3, Hertz(4), clocks);
@@ -173,9 +173,9 @@ fn main() -> ! {
     let _touch_yd = gpioc.pc0.into_pull_down_input();
     let _touch_yu = gpioc.pc1.into_floating_input();  // LATER: analog
     let mut touch_xl = gpioc.pc2.into_push_pull_output();
-    touch_xl.set_low();
+    let _ = touch_xl.set_low();
     let mut touch_xr = gpioc.pc3.into_push_pull_output();
-    touch_xr.set_high();
+    let _ = touch_xr.set_high();
 
     // Set yu input pin to analog mode.  Hardcoded for now!
     modif!(GPIOC.moder: moder1 = 0b11);
@@ -218,43 +218,43 @@ fn main() -> ! {
     // Configure layer 1 (main framebuffer)
 
     // Horizontal and vertical window (coordinates include porches)
-    write!(LTDC.l1whpcr: whstpos = H_WIN_START + 1, whsppos = H_WIN_START + WIDTH);
-    write!(LTDC.l1wvpcr: wvstpos = V_WIN_START + 1, wvsppos = V_WIN_START + HEIGHT);
+    write!(LTDC.layer1.whpcr: whstpos = H_WIN_START + 1, whsppos = H_WIN_START + WIDTH);
+    write!(LTDC.layer1.wvpcr: wvstpos = V_WIN_START + 1, wvsppos = V_WIN_START + HEIGHT);
     // Pixel format
-    write!(LTDC.l1pfcr: pf = 0b101);  // 8-bit (CLUT enabled below)
+    write!(LTDC.layer1.pfcr: pf = 0b101);  // 8-bit (CLUT enabled below)
     // Constant alpha value
-    write!(LTDC.l1cacr: consta = 0xFF);
+    write!(LTDC.layer1.cacr: consta = 0xFF);
     // Default color values
-    write!(LTDC.l1dccr: dcalpha = 0, dcred = 0, dcgreen = 0, dcblue = 0);
+    write!(LTDC.layer1.dccr: dcalpha = 0, dcred = 0, dcgreen = 0, dcblue = 0);
     // Blending factors
-    write!(LTDC.l1bfcr: bf1 = 4, bf2 = 5);  // Constant alpha
+    write!(LTDC.layer1.bfcr: bf1 = 4, bf2 = 5);  // Constant alpha
     // Color frame buffer start address
-    write!(LTDC.l1cfbar: cfbadd = FB_CONSOLE.as_ptr() as u32);
+    write!(LTDC.layer1.cfbar: cfbadd = FB_CONSOLE.as_ptr() as u32);
     // Color frame buffer line length (active*bpp + 3), and pitch
-    write!(LTDC.l1cfblr: cfbll = WIDTH + 3, cfbp = WIDTH);
+    write!(LTDC.layer1.cfblr: cfbll = WIDTH + 3, cfbp = WIDTH);
     // Frame buffer number of lines
-    write!(LTDC.l1cfblnr: cfblnbr = HEIGHT);
+    write!(LTDC.layer1.cfblnr: cfblnbr = HEIGHT);
     // Set up 256-color LUT
     for (i, (r, g, b)) in Console::get_lut_colors().enumerate() {
-        write!(LTDC.l1clutwr: clutadd = i as u8, red = r, green = g, blue = b);
+        write!(LTDC.layer1.clutwr: clutadd = i as u8, red = r, green = g, blue = b);
     }
 
     // Configure layer 2 (cursor)
 
     // Initial position: top left character
-    write!(LTDC.l2whpcr: whstpos = H_WIN_START + 1, whsppos = H_WIN_START + CHARW);
-    write!(LTDC.l2wvpcr: wvstpos = V_WIN_START + CHARH, wvsppos = V_WIN_START + CHARH);
-    write!(LTDC.l2pfcr: pf = 0b101);  // L-8 without CLUT
-    write!(LTDC.l2cacr: consta = 0xFF);
-    write!(LTDC.l2dccr: dcalpha = 0, dcred = 0, dcgreen = 0, dcblue = 0);
-    write!(LTDC.l2bfcr: bf1 = 6, bf2 = 7);  // Constant alpha * Pixel alpha
-    write!(LTDC.l2cfbar: cfbadd = CURSORBUF.as_ptr() as u32);
-    write!(LTDC.l2cfblr: cfbll = CHARW + 3, cfbp = CHARW);
-    write!(LTDC.l2cfblnr: cfblnbr = 1);  // Cursor is one line of 6 pixels
+    write!(LTDC.layer2.whpcr: whstpos = H_WIN_START + 1, whsppos = H_WIN_START + CHARW);
+    write!(LTDC.layer2.wvpcr: wvstpos = V_WIN_START + CHARH, wvsppos = V_WIN_START + CHARH);
+    write!(LTDC.layer2.pfcr: pf = 0b101);  // L-8 without CLUT
+    write!(LTDC.layer2.cacr: consta = 0xFF);
+    write!(LTDC.layer2.dccr: dcalpha = 0, dcred = 0, dcgreen = 0, dcblue = 0);
+    write!(LTDC.layer2.bfcr: bf1 = 6, bf2 = 7);  // Constant alpha * Pixel alpha
+    write!(LTDC.layer2.cfbar: cfbadd = CURSORBUF.as_ptr() as u32);
+    write!(LTDC.layer2.cfblr: cfbll = CHARW + 3, cfbp = CHARW);
+    write!(LTDC.layer2.cfblnr: cfblnbr = 1);  // Cursor is one line of 6 pixels
 
     // Enable layer1, disable layer2 initially
-    modif!(LTDC.l1cr: cluten = true, len = true);
-    modif!(LTDC.l2cr: len = false);
+    modif!(LTDC.layer1.cr: cluten = true, len = true);
+    modif!(LTDC.layer2.cr: len = false);
 
     // Reload config (immediate)
     write!(LTDC.srcr: imr = true);
@@ -266,7 +266,7 @@ fn main() -> ! {
     write!(LTDC.srcr: imr = true);
 
     // Enable display via GPIO too
-    disp_on.set_high();
+    let _ = disp_on.set_high();
 
     // Enable interrupts
     let mut nvic = pcore.NVIC;
@@ -328,7 +328,7 @@ fn TIM3() {
     static mut VISIBLE: bool = false;
     // Toggle layer2 on next vsync
     *VISIBLE = !*VISIBLE;
-    modif!(LTDC.l2cr: len = bit(CURSOR_ENABLED.load(Ordering::Relaxed) && *VISIBLE));
+    modif!(LTDC.layer2.cr: len = bit(CURSOR_ENABLED.load(Ordering::Relaxed) && *VISIBLE));
     write!(LTDC.srcr: vbr = true);
     // Reset timer
     modif!(TIM3.sr: uif = false);
@@ -396,7 +396,7 @@ pub fn reset_to_bootloader<O: OutputPin>(scb: stm::SCB, mut pin: O) -> ! {
     unsafe {
         arm::interrupt::disable();
         // Set Boot0 high (keeps high through reset via RC circuit)
-        pin.set_high();
+        let _ = pin.set_high();
         arm::asm::delay(10000);
         arm::asm::dsb();
         scb.aircr.write(SCB_AIRCR_RESET);

@@ -3,7 +3,7 @@
 
 use arm;
 use hal::gpio::{gpioc, Output, OpenDrain};
-use embedded_hal::digital::{InputPin, OutputPin};
+use embedded_hal::digital::v2::{InputPin, OutputPin};
 
 pub type Result<T> = core::result::Result<T, ()>;
 
@@ -55,7 +55,7 @@ impl I2CEEprom {
         self.delay();
         let bit = self.sda.is_high();
         self.scl.set_low();
-        bit
+        bit.unwrap()
     }
 
     fn write_byte(&mut self, mut byte: u8) -> Result<()> {

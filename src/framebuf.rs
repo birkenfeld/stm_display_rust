@@ -188,7 +188,7 @@ impl FrameBuffer {
 
     pub fn activate(&self) {
         // Color frame buffer start address
-        write!(LTDC.l1cfbar: cfbadd = self.buf.as_ptr() as u32);
+        write!(LTDC.layer1.cfbar: cfbadd = self.buf.as_ptr() as u32);
         // reload on next vsync
         write!(LTDC.srcr: vbr = true);
         crate::enable_cursor(self.has_cursor);

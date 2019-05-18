@@ -43,9 +43,9 @@ impl Console {
     }
 
     fn position_cursor(&self) {
-        write!(LTDC.l2whpcr: whstpos = H_WIN_START + self.cx*CHARW + 1,
+        write!(LTDC.layer2.whpcr: whstpos = H_WIN_START + self.cx*CHARW + 1,
                whsppos = H_WIN_START + (self.cx + 1)*CHARW);
-        write!(LTDC.l2wvpcr: wvstpos = V_WIN_START + (self.cy + 1)*CHARH,
+        write!(LTDC.layer2.wvpcr: wvstpos = V_WIN_START + (self.cy + 1)*CHARH,
                wvsppos = V_WIN_START + (self.cy + 1)*CHARH);
         // reload on next vsync
         write!(LTDC.srcr: vbr = true);

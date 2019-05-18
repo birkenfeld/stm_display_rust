@@ -28,38 +28,38 @@ macro_rules! bitset {
 
 #[macro_export]
 macro_rules! write {
-    ($p:ident . $r:ident : $($tt:tt)+) => {
-        unsafe { (*stm::$p::ptr()).$r.write(|w| bitset!(w; $($tt)+)); }
+    ($p:ident . $($r:ident $([$ix:expr])?).+ : $($tt:tt)+) => {
+        unsafe { (*stm::$p::ptr()).$($r$([$ix])?).+.write(|w| bitset!(w; $($tt)+)); }
     };
 }
 
 #[macro_export]
 macro_rules! read {
-    ($p:ident . $r:ident : $bit:ident) => {
-        unsafe { (*stm::$p::ptr()).$r.read().$bit().bits() }
+    ($p:ident .  $($r:ident $([$ix:expr])?).+ : $bit:ident) => {
+        unsafe { (*stm::$p::ptr()).$($r$([$ix])?).+.read().$bit().bits() }
     };
 }
 
 #[macro_export]
 macro_rules! readb {
-    ($p:ident . $r:ident : $bit:ident) => {
-        unsafe { (*stm::$p::ptr()).$r.read().$bit().bit_is_set() }
+    ($p:ident .  $($r:ident $([$ix:expr])?).+ : $bit:ident) => {
+        unsafe { (*stm::$p::ptr()).$($r$([$ix])?).+.read().$bit().bit_is_set() }
     };
 }
 
 #[macro_export]
 macro_rules! modif {
-    ($p:ident . $r:ident : $($tt:tt)+) => {
-        unsafe { (*stm::$p::ptr()).$r.modify(|_, w| bitset!(w; $($tt)+)); }
+    ($p:ident . $($r:ident $([$ix:expr])?).+ : $($tt:tt)+) => {
+        unsafe { (*stm::$p::ptr()).$($r$([$ix])?).+.modify(|_, w| bitset!(w; $($tt)+)); }
     };
 }
 
 #[macro_export]
 macro_rules! wait_for {
-    ($p:ident . $r:ident : $bit:ident) => {
-        unsafe { while (*stm::$p::ptr()).$r.read().$bit().bit_is_clear() {} }
+    ($p:ident . $($r:ident $([$ix:expr])?).+ : $bit:ident) => {
+        unsafe { while (*stm::$p::ptr()).$($r$([$ix])?).+.read().$bit().bit_is_clear() {} }
     };
-    ($p:ident . $r:ident : ! $bit:ident) => {
-        unsafe { while (*stm::$p::ptr()).$r.read().$bit().bit_is_set() {} }
+    ($p:ident . $($r:ident $([$ix:expr])?).+ : ! $bit:ident) => {
+        unsafe { while (*stm::$p::ptr()).$($r$([$ix])?).+.read().$bit().bit_is_set() {} }
     };
 }

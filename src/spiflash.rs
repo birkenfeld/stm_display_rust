@@ -2,7 +2,7 @@
 #![allow(unused)]
 
 use crate::stm;
-use embedded_hal::digital::OutputPin;
+use embedded_hal::digital::v2::OutputPin;
 
 #[link_section = ".sram1bss"]
 static mut DMABUF: [u8; 1029] = [0; 1029];
@@ -44,17 +44,17 @@ impl<SPI, CS: OutputPin> SPIFlash<SPI, CS> {
 
         // Set up memory and peripheral addresses.
         // Stream 4: TX
-        modif!(DMA1.s4cr: msize = 0, psize = 0,
+        modif!(DMA1.st[4].cr: msize = 0, psize = 0,
                minc = true, pinc = false, dbm = false, ct = false, circ = false,
                dir = 0b01 /* m->p */, chsel = 0);
-        modif!(DMA1.s4m0ar: m0a = &mut DMABUF as *const _ as u32);
-        modif!(DMA1.s4par: pa = &(*stm::SPI2::ptr()).dr as *const _ as u32);
+        modif!(DMA1.st[4].m0ar: m0a = &mut DMABUF as *const _ as u32);
+        modif!(DMA1.st[4].par: pa = &(*stm::SPI2::ptr()).dr as *const _ as u32);
         // Stream 3: RX
-        modif!(DMA1.s3cr: msize = 0, psize = 0,
+        modif!(DMA1.st[3].cr: msize = 0, psize = 0,
                minc = true, pinc = false, dbm = false, ct = false, circ = false,
                dir = 0b00 /* p->m */, chsel = 0);
-        modif!(DMA1.s3m0ar: m0a = &mut DMABUF as *const _ as u32);
-        modif!(DMA1.s3par: pa = &(*stm::SPI2::ptr()).dr as *const _ as u32);
+        modif!(DMA1.st[3].m0ar: m0a = &mut DMABUF as *const _ as u32);
+        modif!(DMA1.st[3].par: pa = &(*stm::SPI2::ptr()).dr as *const _ as u32);
 
         let mut slf = Self { spi, cs, wp_disabled: false };
 
@@ -67,13 +67,13 @@ impl<SPI, CS: OutputPin> SPIFlash<SPI, CS> {
     fn transfer<'a>(&'a mut self, inp: &[u8], outlen: usize) -> &'a [u8] {
         let ntotal = inp.len() + outlen;
         unsafe { DMABUF[..inp.len()].copy_from_slice(inp); }
-        modif!(DMA1.s3ndtr: ndt = ntotal as u16);
-        modif!(DMA1.s4ndtr: ndt = ntotal as u16);
+        modif!(DMA1.st[3].ndtr: ndt = ntotal as u16);
+        modif!(DMA1.st[4].ndtr: ndt = ntotal as u16);
 
         // Enable chip-select and start transfer.
         self.cs.set_low();
-        modif!(DMA1.s3cr: en = true);
-        modif!(DMA1.s4cr: en = true);
+        modif!(DMA1.st[3].cr: en = true);
+        modif!(DMA1.st[4].cr: en = true);
 
         // Wait for RX completion and reset flags.
         wait_for!(DMA1.lisr: tcif3);
@@ -82,8 +82,8 @@ impl<SPI, CS: OutputPin> SPIFlash<SPI, CS> {
         write!(DMA1.hifcr: ctcif4 = true, cteif4 = true);
 
         // Stop transfer.
-        modif!(DMA1.s3cr: en = false);
-        modif!(DMA1.s4cr: en = false);
+        modif!(DMA1.st[3].cr: en = false);
+        modif!(DMA1.st[4].cr: en = false);
         self.cs.set_high();
 
         unsafe { &DMABUF[inp.len()..ntotal] }
