@@ -5,6 +5,7 @@ extern crate panic_semihosting;
 use stm32f4::stm32f429 as stm;
 use stm::interrupt;
 use cortex_m_rt::ExceptionFrame;
+use arm::peripheral::syst::SystClkSource;
 use heapless::spsc::Queue;
 use heapless::consts::*;
 use hal::time::*;
@@ -14,6 +15,7 @@ use hal::rcc::RccExt;
 use hal::gpio::{GpioExt, Speed};
 use embedded_hal::digital::v2::OutputPin;
 use core::sync::atomic::{AtomicBool, Ordering};
+use core::fmt::Write;
 
 #[macro_use]
 mod util;
@@ -94,7 +96,12 @@ fn main() -> ! {
 
     // Activate flash caches
     modif!(FLASH.acr: dcen = true, icen = true, prften = true);
-    // let mut delay = Delay::new(pcore.SYST, clocks);
+
+    // Set up systick
+    let mut syst = pcore.SYST;
+    syst.set_clock_source(SystClkSource::Core);
+    syst.set_reload(14_000_000-1);  // every 12th of a second @ 168MHz
+    syst.enable_interrupt();
 
     // Set up pins
     let gpioa = peri.GPIOA.split();
@@ -102,6 +109,15 @@ fn main() -> ! {
     let gpioc = peri.GPIOC.split();
     let gpiod = peri.GPIOD.split();
     let gpioe = peri.GPIOE.split();
+
+    // set up external timer input
+    let _ = gpioe.pe0.into_alternate_af2();
+
+    // set up TIM4 for counting pulses (can't do it with HAL)
+    modif!(RCC.apb1enr: tim4en = true);
+    pulse!(RCC.apb1rstr: tim4rst);
+    write!(TIM4.smcr: ece = true);
+    modif!(TIM4.cr1: urs = true, cen = true);
 
     // LCD enable: set it low first to avoid LCD bleed while setting up timings
     let mut disp_on = gpioa.pa8.into_push_pull_output();
@@ -119,7 +135,7 @@ fn main() -> ! {
     let mut blink_timer = Timer::tim3(peri.TIM3, Hertz(4), clocks);
 
     // Set up touch detection timer
-    let mut touch_timer = Timer::tim4(peri.TIM4, Hertz(100), clocks);
+    let mut touch_timer = Timer::tim5(peri.TIM5, Hertz(100), clocks);
 
     // External Flash memory via SPI
     /*
@@ -271,7 +287,7 @@ fn main() -> ! {
     // Enable interrupts
     let mut nvic = pcore.NVIC;
     nvic.enable(stm::Interrupt::TIM3);
-    nvic.enable(stm::Interrupt::TIM4);
+    nvic.enable(stm::Interrupt::TIM5);
     blink_timer.listen(Event::TimeOut);
     touch_timer.listen(Event::TimeOut);
 
@@ -295,9 +311,23 @@ fn main() -> ! {
         }
     }
 
+    // queue commands to start displaying frequency
+    for seq in &[&b"\x1b\x1b\x02\x40\x00"[..],             // clear to black
+                 b"\x1b\x1b\x03\x30\x30\x30",         // set position
+                 b"\x1b\x1b\x02\x31\x02",             // set font
+                 b"\x1b\x1b\x05\x33\x00\x08\x07\x0f", // set colors
+                 b"\x1b\x1b\x01\x20"] {               // switch to gfx mode
+        for &byte in *seq {
+            unsafe { UART_RX.enqueue_unchecked(byte); }
+        }
+    }
+
     // Activate USART receiver
-    modif!(USART1.cr1: rxneie = true);
-    nvic.enable(stm::Interrupt::USART1);
+    // modif!(USART1.cr1: rxneie = true);
+    // nvic.enable(stm::Interrupt::USART1);
+
+    syst.clear_current();
+    syst.enable_counter();
 
     // Main loop: process input from UART
     let mut fifo = unsafe { UART_RX.split().1 };
@@ -351,7 +381,7 @@ struct TouchState {
 }
 
 #[stm::interrupt]
-fn TIM4() {
+fn TIM5() {
     static mut STATE: TouchState = TouchState { last: false, data: [0; NSAMPLES], idx: 0};
     let data = read!(ADC1.dr: data);
     STATE.data[STATE.idx] = data;
@@ -365,8 +395,25 @@ fn TIM4() {
         STATE.last = false;
     }
     // Reset timer
-    modif!(TIM4.sr: uif = false);
-    modif!(TIM4.cr1: cen = true);
+    modif!(TIM5.sr: uif = false);
+    modif!(TIM5.cr1: cen = true);
+}
+
+#[cortex_m_rt::exception]
+#[allow(non_upper_case_globals, unused_unsafe)]
+unsafe fn SysTick() -> ! {
+    static mut n: u32 = 0;
+    let mut buf = arrayvec::ArrayString::<[u8; 16]>::new();
+    *n += 1;
+    if *n == 12 {
+        let freq = read!(TIM4.cnt: cnt);
+        core::write!(buf, "\x1b\x1b\x0b\x44{:7} Hz", freq).unwrap();
+        for &ch in buf.as_bytes() {
+            let _ = UART_RX.split().0.enqueue(ch);
+        }
+        write!(TIM2.cnt: cnt = 0);
+        *n = 0;
+    }
 }
 
 #[cortex_m_rt::exception]
