@@ -2,10 +2,11 @@
 #![no_std]
 
 extern crate panic_semihosting;
+
 use stm32f4::stm32f429 as stm;
 use stm::interrupt;
 use cortex_m_rt::ExceptionFrame;
-use heapless::spsc::Queue;
+use heapless::spsc::{SingleCore, Queue};
 use heapless::consts::*;
 use hal::time::*;
 use hal::timer::{Timer, Event};
@@ -73,7 +74,7 @@ static CURSORBUF: [u8; CHARW as usize] = [CURSOR_COLOR; CHARW as usize];
 static CURSOR_ENABLED: AtomicBool = AtomicBool::new(false);
 
 // UART receive buffer
-static mut UART_RX: Queue<u8, U1024, u16> = Queue::u16();
+static mut UART_RX: Queue<u8, U1024, u16, SingleCore> = unsafe { Queue::u16_sc() };
 
 // Touch event buffer
 static mut TOUCH_EVT: Queue<u16, U16, u8> = Queue::u8();
