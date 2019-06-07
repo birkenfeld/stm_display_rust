@@ -110,8 +110,8 @@ impl Console {
                     // XXX should not get reset by color selection
                     1  => { self.color[3] |= 0b1000; } // XXX: only for 16colors
                     22 => { self.color[3] &= !0b1000; }
-                    30...37 => { self.color[3] = arg as u8 - 30; }
-                    40...47 => { self.color[0] = arg as u8 - 40; }
+                    30..=37 => { self.color[3] = arg as u8 - 30; }
+                    40..=47 => { self.color[0] = arg as u8 - 40; }
                     38 => { self.color[3] = args.nth(1).unwrap_or(0) as u8; }
                     48 => { self.color[0] = args.nth(1).unwrap_or(0) as u8; }
                     _ => {}
