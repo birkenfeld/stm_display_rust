@@ -13,7 +13,7 @@ use hal::timer::{Timer, Event};
 use hal::serial::{Serial, config::Config as SerialConfig};
 use hal::rcc::RccExt;
 use hal::gpio::{GpioExt, Speed};
-use embedded_hal::digital::v2::OutputPin;
+use embedded_hal::digital::v2::{InputPin, OutputPin};
 use core::sync::atomic::{AtomicBool, Ordering};
 
 #[macro_use]
@@ -123,15 +123,13 @@ fn main() -> ! {
     let mut touch_timer = Timer::tim4(peri.TIM4, Hertz(100), clocks);
 
     // External Flash memory via SPI
-    /*
-    let cs = gpiob.pb12.into_push_pull_output(&mut gpiob.moder, &mut gpiob.otyper);
-    let sclk = gpiob.pb13.into_af5(&mut gpiob.moder, &mut gpiob.afrh);
-    let miso = gpiob.pb14.into_af5(&mut gpiob.moder, &mut gpiob.afrh);
-    let mosi = gpiob.pb15.into_af5(&mut gpiob.moder, &mut gpiob.afrh);
+    let cs = gpiob.pb12.into_push_pull_output();
+    let sclk = gpiob.pb13.into_alternate_af5();
+    let miso = gpiob.pb14.into_alternate_af5();
+    let mosi = gpiob.pb15.into_alternate_af5();
     let spi2 = hal::spi::Spi::spi2(peri.SPI2, (sclk, miso, mosi),
-        hal_base::spi::MODE_0, MegaHertz(40), clocks, &mut rcc.apb1);
+        embedded_hal::spi::MODE_0, Hertz(40_000_000), clocks);
     let mut spi_flash = spiflash::SPIFlash::new(spi2, cs);
-    */
 
     // Console UART (USART #1)
     let utx = gpioa.pa9 .into_alternate_af7();
@@ -169,6 +167,22 @@ fn main() -> ! {
     gpioe.pe13.into_alternate_af14().set_speed(Speed::VeryHigh);
     gpioe.pe14.into_alternate_af14().set_speed(Speed::VeryHigh);
     gpioe.pe15.into_alternate_af14().set_speed(Speed::VeryHigh);
+
+    // Extension header pins
+    let testmode_pin = gpioe.pe1.into_pull_down_input();
+    gpioe.pe0.into_pull_down_input();
+    gpiob.pb6.into_pull_down_input();
+    gpiob.pb5.into_pull_down_input();
+    gpiob.pb4.into_pull_down_input();
+    gpiob.pb3.into_pull_down_input();
+    gpiod.pd7.into_pull_down_input();
+    gpiod.pd5.into_pull_down_input();
+    gpiod.pd4.into_pull_down_input();
+    gpiod.pd2.into_pull_down_input();
+    gpiod.pd1.into_pull_down_input();
+    gpiod.pd0.into_pull_down_input();
+    gpioc.pc12.into_pull_down_input();
+    gpioc.pc11.into_pull_down_input();
 
     // Pins for touch screen
     let _touch_yd = gpioc.pc0.into_pull_down_input();
@@ -285,6 +299,131 @@ fn main() -> ! {
         console
     );
 
+    // Activate USART receiver
+    modif!(USART1.cr1: rxneie = true);
+    nvic.enable(stm::Interrupt::USART1);
+
+    let mut uart = unsafe { UART_RX.split().1 };
+    let mut touch = unsafe { TOUCH_EVT.split().1 };
+
+    if testmode_pin.is_high().unwrap() {
+        // Test mode
+        use framebuf::FONTS;
+        const C_B: &[u8; 4] = &[15, 7, 8, 0];
+        const C_R: &[u8; 4] = &[15, 217, 203, 160];
+        const C_G: &[u8; 4] = &[15, 156, 82, 34];
+        const DATA: &[u8; 16] = b"\xff\xaa\x55\x00Test data\x00\x00\x00";
+
+        const P_X: u16 = 184;
+        const P_Y: u16 = 24;
+        const P_X2: u16 = P_X + 88;
+
+        // #1. Display
+        disp.graphics().clear(15);
+        disp.graphics().activate();
+        disp.graphics().line(0, 8, 480, 8, 0);
+        disp.graphics().text(&FONTS[1], 176, 0, b"Self test active", C_B);
+        disp.graphics().text(&FONTS[1], 16, 32, b"Touch anywhere to cycle through colors.", C_B);
+        disp.graphics().text(&FONTS[1], 16, 48, b"Make sure no pixel errors are present.", C_B);
+        while !touch.dequeue().is_some() { }
+
+        disp.graphics().clear(1);
+        while !touch.dequeue().is_some() { }
+        disp.graphics().clear(2);
+        while !touch.dequeue().is_some() { }
+        disp.graphics().clear(4);
+        while !touch.dequeue().is_some() { }
+        disp.graphics().clear(15);
+        while !touch.dequeue().is_some() { }
+
+        // #2. Flash memory
+        disp.graphics().clear(15);
+        disp.graphics().line(0, 8, 480, 8, 0);
+        disp.graphics().text(&FONTS[1], 176, 0, b"Self test active", C_B);
+
+        disp.graphics().text(&FONTS[1], P_X, P_Y, b"Flash.....", C_B);
+
+        spi_flash.erase_sector(0);
+        spi_flash.write_bulk(0x100, DATA);
+        if spi_flash.read(0x100, DATA.len()).iter().eq(DATA) {
+            disp.graphics().text(&FONTS[1], P_X2, P_Y, b"OK", C_G);
+        } else {
+            disp.graphics().text(&FONTS[1], P_X2, P_Y, b"FAIL", C_R);
+        }
+
+        // #3. EEPROM
+        disp.graphics().text(&FONTS[1], P_X, P_Y+16, b"E\xfdPROM....", C_B);
+
+        if let Err(_) = eeprom.write_at_addr(128, DATA) {
+            disp.graphics().text(&FONTS[1], P_X2, P_Y+16, b"FAIL", C_R);
+        } else {
+            let mut buf = [0; 16];
+            if let Err(_) = eeprom.read_at_addr(128, &mut buf) {
+                disp.graphics().text(&FONTS[1], P_X2, P_Y+16, b"FAIL", C_R);
+            } else {
+                if &buf != DATA {
+                    disp.graphics().text(&FONTS[1], P_X2, P_Y+16, b"FAIL", C_R);
+                } else {
+                    disp.graphics().text(&FONTS[1], P_X2, P_Y+16, b"OK", C_G);
+                }
+            }
+        }
+
+        // #4. UART
+        disp.graphics().text(&FONTS[1], P_X, P_Y+32, b"UART......", C_B);
+
+        let mut failed = false;
+        'outer: for &c1 in DATA {
+            disp.console().write_to_host(&[c1]);
+            loop {
+                if let Some(c2) = uart.dequeue() {
+                    if c1 != c2 {
+                        disp.graphics().text(&FONTS[1], P_X2, P_Y+32, b"FAIL", C_R);
+                        failed = true;
+                        break 'outer;
+                    }
+                    break;
+                }
+            }
+        }
+        if !failed {
+            disp.graphics().text(&FONTS[1], P_X2, P_Y+32, b"OK", C_G);
+        }
+
+        // #5. Touch
+        disp.graphics().text(&FONTS[1], P_X, P_Y+48, b"Touch.....", C_B);
+        disp.graphics().line(8, 20, 8, 120, 0);
+        disp.graphics().line(8, 120, 120, 120, 0);
+        disp.graphics().line(120, 120, 120, 20, 0);
+        disp.graphics().line(120, 20, 8, 20, 0);
+        disp.graphics().text(&FONTS[1], 20, 56, b"Touch here", C_B);
+        loop {
+            if let Some(x) = touch.dequeue() {
+                if x < 1500 {
+                    disp.graphics().rect(8, 20, 121, 121, 15);
+                    break;
+                }
+            }
+        }
+        disp.graphics().line(352, 20, 352, 120, 0);
+        disp.graphics().line(352, 120, 472, 120, 0);
+        disp.graphics().line(472, 120, 472, 20, 0);
+        disp.graphics().line(472, 20, 352, 20, 0);
+        disp.graphics().text(&FONTS[1], 364, 56, b"Touch here", C_B);
+        loop {
+            if let Some(x) = touch.dequeue() {
+                if x > 3000 {
+                    disp.graphics().rect(352, 20, 473, 121, 15);
+                    disp.graphics().text(&FONTS[1], P_X2, P_Y+48, b"OK", C_G);
+                    break;
+                }
+            }
+        }
+
+        disp.graphics().text(&FONTS[1], 16, 96, b"Touch anywhere to exit self test mode.", C_B);
+        while !touch.dequeue().is_some() { }
+    }
+
     // Switch to console if nothing else programmed
     disp.console().activate();
 
@@ -296,18 +435,12 @@ fn main() -> ! {
         }
     }
 
-    // Activate USART receiver
-    modif!(USART1.cr1: rxneie = true);
-    nvic.enable(stm::Interrupt::USART1);
-
-    // Main loop: process input from UART
-    let mut fifo = unsafe { UART_RX.split().1 };
-    let mut touch = unsafe { TOUCH_EVT.split().1 };
+    // Normal main loop: process input from UART
     loop {
-        if let Some(y) = touch.dequeue() {
-            disp.process_touch(0, (y >> 4) as u8);
+        if let Some(x) = touch.dequeue() {
+            disp.process_touch((x >> 4) as u8, 0);
         }
-        if let Some(ch) = fifo.dequeue() {
+        if let Some(ch) = uart.dequeue() {
             match disp.process_byte(ch) {
                 Action::None => (),
                 Action::Reset => reset(pcore.SCB),

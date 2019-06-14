@@ -5,7 +5,7 @@ use crate::stm;
 use embedded_hal::digital::v2::OutputPin;
 
 #[link_section = ".sram1bss"]
-static mut DMABUF: [u8; 1029] = [0; 1029];
+static mut DMABUF: [u8; 1030] = [0; 1030];
 
 const OP_READ:           u8 = 0x03;
 const OP_READ_HS:        u8 = 0x0B;

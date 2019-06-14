@@ -86,6 +86,10 @@ impl DisplayState {
         &mut self.con
     }
 
+    pub fn graphics(&mut self) -> &mut FrameBuffer {
+        &mut self.gfx
+    }
+
     pub fn process_byte(&mut self, ch: u8) -> Action {
         match self.escape {
             Escape::None => {
