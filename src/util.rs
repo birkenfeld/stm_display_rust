@@ -55,6 +55,14 @@ macro_rules! modif {
 }
 
 #[macro_export]
+macro_rules! pulse {
+    ($p:ident . $($r:ident $([$ix:expr])?).+ : $bit:ident) => {
+        write!($p.$($r$([$ix])?).+: $bit = true);
+        write!($p.$($r$([$ix])?).+: $bit = false);
+    };
+}
+
+#[macro_export]
 macro_rules! wait_for {
     ($p:ident . $($r:ident $([$ix:expr])?).+ : $bit:ident) => {
         unsafe { while (*stm::$p::ptr()).$($r$([$ix])?).+.read().$bit().bit_is_clear() {} }

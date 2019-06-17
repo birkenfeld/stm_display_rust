@@ -196,8 +196,7 @@ fn main() -> ! {
 
     // Activate and configure ADC.
     modif!(RCC.apb2enr: adc1en = true);
-    modif!(RCC.apb2rstr: adcrst = true);
-    modif!(RCC.apb2rstr: adcrst = false);
+    pulse!(RCC.apb2rstr: adcrst);
     // One conversion of channel 11, continuous mode.
     write!(ADC1.sqr1: l = 0);
     write!(ADC1.sqr3: sq1 = 11);
@@ -207,7 +206,9 @@ fn main() -> ! {
 
     // Enable clocks
     modif!(RCC.apb2enr: ltdcen = true);
+    pulse!(RCC.apb2rstr: ltdcrst);
     modif!(RCC.ahb1enr: dma2den = true);
+    pulse!(RCC.ahb1rstr: dma2drst);
     // Enable PLLSAI for LTDC
     //   PLLSAI_VCO Input = HSE_VALUE/PLL_M = 1 Mhz
     //   PLLSAI_VCO Output = PLLSAI_VCO Input * PLLSAI_N = 216 Mhz (f=100..432 MHz)

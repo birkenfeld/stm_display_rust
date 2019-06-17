@@ -35,8 +35,7 @@ impl<SPI, CS: OutputPin> SPIFlash<SPI, CS> {
 
         // Enable and reset the DMA controller.
         modif!(RCC.ahb1enr: dma1en = true);
-        modif!(RCC.ahb1rstr: dma1rst = true);
-        modif!(RCC.ahb1rstr: dma1rst = false);
+        pulse!(RCC.ahb1rstr: dma1rst);
 
         // Enable DMA transfers for SPI.
         modif!(SPI2.cr2: txdmaen = true);
