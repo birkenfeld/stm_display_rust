@@ -6,6 +6,7 @@ extern crate panic_semihosting;
 use stm32f4::stm32f429 as stm;
 use stm::interrupt;
 use cortex_m_rt::ExceptionFrame;
+// TODO: use new mpmc queue
 use heapless::spsc::{SingleCore, Queue};
 use heapless::consts::*;
 use hal::time::*;
@@ -307,8 +308,7 @@ fn main() -> ! {
     let mut touch = unsafe { TOUCH_EVT.split().1 };
 
     if testmode_pin.is_high().unwrap() {
-        // Test mode
-        use framebuf::FONTS;
+        // Test mode TODO: move to its own module?
         const C_B: &[u8; 4] = &[15, 7, 8, 0];
         const C_R: &[u8; 4] = &[15, 217, 203, 160];
         const C_G: &[u8; 4] = &[15, 156, 82, 34];
@@ -318,13 +318,15 @@ fn main() -> ! {
         const P_Y: u16 = 24;
         const P_X2: u16 = P_X + 88;
 
+        const FONT: &framebuf::Font = &framebuf::FONTS[1];
+
         // #1. Display
         disp.graphics().clear(15);
         disp.graphics().activate();
         disp.graphics().line(0, 8, 480, 8, 0);
-        disp.graphics().text(&FONTS[1], 176, 0, b"Self test active", C_B);
-        disp.graphics().text(&FONTS[1], 16, 32, b"Touch anywhere to cycle through colors.", C_B);
-        disp.graphics().text(&FONTS[1], 16, 48, b"Make sure no pixel errors are present.", C_B);
+        disp.graphics().text(FONT, 176, 0, b"Self test active", C_B);
+        disp.graphics().text(FONT, 16, 32, b"Touch anywhere to cycle through colors.", C_B);
+        disp.graphics().text(FONT, 16, 48, b"Make sure no pixel errors are present.", C_B);
         while !touch.dequeue().is_some() { }
 
         disp.graphics().clear(1);
@@ -339,38 +341,38 @@ fn main() -> ! {
         // #2. Flash memory
         disp.graphics().clear(15);
         disp.graphics().line(0, 8, 480, 8, 0);
-        disp.graphics().text(&FONTS[1], 176, 0, b"Self test active", C_B);
+        disp.graphics().text(FONT, 176, 0, b"Self test active", C_B);
 
-        disp.graphics().text(&FONTS[1], P_X, P_Y, b"Flash.....", C_B);
+        disp.graphics().text(FONT, P_X, P_Y, b"Flash.....", C_B);
 
         spi_flash.erase_sector(0);
         spi_flash.write_bulk(0x100, DATA);
         if spi_flash.read(0x100, DATA.len()).iter().eq(DATA) {
-            disp.graphics().text(&FONTS[1], P_X2, P_Y, b"OK", C_G);
+            disp.graphics().text(FONT, P_X2, P_Y, b"OK", C_G);
         } else {
-            disp.graphics().text(&FONTS[1], P_X2, P_Y, b"FAIL", C_R);
+            disp.graphics().text(FONT, P_X2, P_Y, b"FAIL", C_R);
         }
 
         // #3. EEPROM
-        disp.graphics().text(&FONTS[1], P_X, P_Y+16, b"E\xfdPROM....", C_B);
+        disp.graphics().text(FONT, P_X, P_Y+16, b"E\xfdPROM....", C_B);
 
         if let Err(_) = eeprom.write_at_addr(128, DATA) {
-            disp.graphics().text(&FONTS[1], P_X2, P_Y+16, b"FAIL", C_R);
+            disp.graphics().text(FONT, P_X2, P_Y+16, b"FAIL", C_R);
         } else {
             let mut buf = [0; 16];
             if let Err(_) = eeprom.read_at_addr(128, &mut buf) {
-                disp.graphics().text(&FONTS[1], P_X2, P_Y+16, b"FAIL", C_R);
+                disp.graphics().text(FONT, P_X2, P_Y+16, b"FAIL", C_R);
             } else {
                 if &buf != DATA {
-                    disp.graphics().text(&FONTS[1], P_X2, P_Y+16, b"FAIL", C_R);
+                    disp.graphics().text(FONT, P_X2, P_Y+16, b"FAIL", C_R);
                 } else {
-                    disp.graphics().text(&FONTS[1], P_X2, P_Y+16, b"OK", C_G);
+                    disp.graphics().text(FONT, P_X2, P_Y+16, b"OK", C_G);
                 }
             }
         }
 
         // #4. UART
-        disp.graphics().text(&FONTS[1], P_X, P_Y+32, b"UART......", C_B);
+        disp.graphics().text(FONT, P_X, P_Y+32, b"UART......", C_B);
 
         let mut failed = false;
         'outer: for &c1 in DATA {
@@ -378,7 +380,7 @@ fn main() -> ! {
             loop {
                 if let Some(c2) = uart.dequeue() {
                     if c1 != c2 {
-                        disp.graphics().text(&FONTS[1], P_X2, P_Y+32, b"FAIL", C_R);
+                        disp.graphics().text(FONT, P_X2, P_Y+32, b"FAIL", C_R);
                         failed = true;
                         break 'outer;
                     }
@@ -387,40 +389,34 @@ fn main() -> ! {
             }
         }
         if !failed {
-            disp.graphics().text(&FONTS[1], P_X2, P_Y+32, b"OK", C_G);
+            disp.graphics().text(FONT, P_X2, P_Y+32, b"OK", C_G);
         }
 
         // #5. Touch
-        disp.graphics().text(&FONTS[1], P_X, P_Y+48, b"Touch.....", C_B);
-        disp.graphics().line(8, 20, 8, 120, 0);
-        disp.graphics().line(8, 120, 120, 120, 0);
-        disp.graphics().line(120, 120, 120, 20, 0);
-        disp.graphics().line(120, 20, 8, 20, 0);
-        disp.graphics().text(&FONTS[1], 20, 56, b"Touch here", C_B);
+        disp.graphics().text(FONT, P_X, P_Y+48, b"Touch.....", C_B);
+        disp.graphics().rect_outline(8, 20, 120, 120, 0);
+        disp.graphics().text(FONT, 20, 56, b"Touch here", C_B);
         loop {
             if let Some(x) = touch.dequeue() {
-                if x < 1500 {
+                if x < 1700 {
                     disp.graphics().rect(8, 20, 121, 121, 15);
                     break;
                 }
             }
         }
-        disp.graphics().line(352, 20, 352, 120, 0);
-        disp.graphics().line(352, 120, 472, 120, 0);
-        disp.graphics().line(472, 120, 472, 20, 0);
-        disp.graphics().line(472, 20, 352, 20, 0);
-        disp.graphics().text(&FONTS[1], 364, 56, b"Touch here", C_B);
+        disp.graphics().rect_outline(352, 20, 472, 120, 0);
+        disp.graphics().text(FONT, 364, 56, b"Touch here", C_B);
         loop {
             if let Some(x) = touch.dequeue() {
                 if x > 3000 {
                     disp.graphics().rect(352, 20, 473, 121, 15);
-                    disp.graphics().text(&FONTS[1], P_X2, P_Y+48, b"OK", C_G);
+                    disp.graphics().text(FONT, P_X2, P_Y+48, b"OK", C_G);
                     break;
                 }
             }
         }
 
-        disp.graphics().text(&FONTS[1], 16, 96, b"Touch anywhere to exit self test mode.", C_B);
+        disp.graphics().text(FONT, 16, 96, b"Touch anywhere to exit self test mode.", C_B);
         while !touch.dequeue().is_some() { }
     }
 
@@ -435,10 +431,17 @@ fn main() -> ! {
         }
     }
 
+    let mut touch_ring = wheelbuf::WheelBuf::new([0u8; 8]);
+
     // Normal main loop: process input from UART
     loop {
         if let Some(x) = touch.dequeue() {
-            disp.process_touch((x >> 4) as u8, 0);
+            let x = (x >> 4) as u8;
+            disp.process_touch(x, 0);
+            touch_ring.push(if x < 106 { 1 } else if x < 162 { 2 } else if x < 218 { 3 } else { 4 });
+            if touch_ring.iter().eq(&[2, 2, 3, 3, 1, 4, 1, 4]) {
+                konami_mode(&mut disp, &mut uart, &mut touch);
+            }
         }
         if let Some(ch) = uart.dequeue() {
             match disp.process_byte(ch) {
@@ -448,6 +451,84 @@ fn main() -> ! {
                 Action::WriteEeprom(len_addr, data_addr, data) => {
                     let _ = eeprom.write_stored_entry(len_addr, data_addr, data);
                 }
+            }
+        }
+    }
+}
+
+const PXE_SCRIPT: &[u8] = b"http://ictrlfs.ictrl.frm2/public/echo.pxe";
+
+// TODO:
+// * move to other module
+// * make it more modular, add helpers
+fn konami_mode(disp: &mut interface::DisplayState,
+               uart: &mut heapless::spsc::Consumer<'_, u8, U1024, u16, SingleCore>,
+               touch: &mut heapless::spsc::Consumer<'_, u16, U16, u8>) {
+    const FONT: &framebuf::Font = &framebuf::FONTS[1];
+    const C_B: &[u8; 4] = &[15, 7, 8, 0];
+    const C_R: &[u8; 4] = &[15, 217, 203, 160];
+
+    let was_gfx = disp.is_graphics();
+    disp.graphics().activate();
+    disp.graphics().clear(15);
+
+    disp.graphics().rect_outline(8, 8, 116, 120, 0);
+    disp.graphics().text(FONT, 20, 56, b"Reset APU", C_B);
+    disp.graphics().rect_outline(124, 8, 236, 120, 0);
+    disp.graphics().text(FONT, 140, 56, b"Reinstall", C_R);
+    disp.graphics().rect_outline(244, 8, 356, 120, 0);
+    disp.graphics().text(FONT, 260, 56, b"Explode", C_B);
+    disp.graphics().rect_outline(364, 8, 472, 120, 0);
+    disp.graphics().text(FONT, 380, 56, b"Cancel", C_B);
+
+    // TODO: helper for getting touch, converting coordinates?
+    let text: &[u8] = loop {
+        if let Some(x) = touch.dequeue() {
+            match x >> 4 {
+                xx if xx < 106 => {
+                    break b"Resetting";
+                },
+                xx if xx < 162 => {
+                    break b"Reinstalling";
+                }
+                _ => {
+                    if was_gfx {
+                        disp.graphics().clear(0);
+                    } else {
+                        disp.console().activate();
+                    }
+                    return;
+                }
+            }
+        }
+    };
+
+    disp.graphics().clear(15);
+    disp.graphics().text(FONT, 20, 30, text, C_R);
+    let mut uart_ring = wheelbuf::WheelBuf::new([0u8; 8]);
+    loop {
+        if let Some(ch) = uart.dequeue() {
+            let _ = uart_ring.push(ch);
+            if uart_ring.iter().eq(b"PXE boot") {
+                // activate the "press N for PXE boot" option
+                disp.graphics().text(FONT, 20, 80, b"PXE", C_B);
+                disp.console().write_to_host(b"N");
+            } else if uart_ring.iter().eq(b"autoboot") {
+                // go up to the "shell" menu item, then start dhcp
+                disp.graphics().text(FONT, 20+4*8, 80, b"DHCP", &[15, 7, 8, 0]);
+                disp.console().write_to_host(b"\x1b[A\ndhcp\n");
+            } else if uart_ring.iter().take(3).eq(b" ok") {
+                // run our custom pxe script
+                disp.graphics().text(FONT, 20+9*8, 80, b"IMG", &[15, 7, 8, 0]);
+                for &ch in b"imgexec ".iter().chain(PXE_SCRIPT).chain(b"\n") {
+                    // firmware keyboard buffer is only ~15 chars, need to wait...
+                    disp.console().write_to_host(&[ch]);
+                    while uart.dequeue().is_none() {}
+                }
+                // PXE is booting, back to normal mode to let the user know
+                // what's happening
+                disp.console().activate();
+                return;
             }
         }
     }

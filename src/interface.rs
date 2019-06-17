@@ -54,6 +54,7 @@ pub struct DisplayState {
     saved: [GraphicsSetting; 32],
     escape: Escape,
     escape_seq: [u8; 256],
+    gfxmode: bool,
 }
 
 pub enum Action<'a> {
@@ -79,7 +80,11 @@ impl DisplayState {
     pub fn new(mut gfx: FrameBuffer, con: Console) -> Self {
         gfx.clear(255);
         Self { gfx, con, cur: Default::default(), saved: Default::default(),
-               escape: Escape::None, escape_seq: [0; 256] }
+               escape: Escape::None, escape_seq: [0; 256], gfxmode: false }
+    }
+
+    pub fn is_graphics(&self) -> bool {
+        self.gfxmode
     }
 
     pub fn console(&mut self) -> &mut Console {
@@ -150,8 +155,14 @@ impl DisplayState {
         let cmd = &self.escape_seq[..len];
         let data_len = cmd.len() - 2;
         match cmd[1] {
-            CMD_MODE_GRAPHICS => self.gfx.activate(),
-            CMD_MODE_CONSOLE  => self.con.activate(),
+            CMD_MODE_GRAPHICS => {
+                self.gfxmode = true;
+                self.gfx.activate();
+            },
+            CMD_MODE_CONSOLE  => {
+                self.gfxmode = false;
+                self.con.activate();
+            },
             CMD_SET_POS => if data_len >= 2 {
                 let (x, y) = pos_from_bytes(&cmd[2..]);
                 self.cur.posx = x;

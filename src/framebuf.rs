@@ -103,6 +103,13 @@ impl FrameBuffer {
         }
     }
 
+    pub fn rect_outline(&mut self, x1: u16, y1: u16, x2: u16, y2: u16, color: u8) {
+        self.line(x1, y1, x1, y2, color);
+        self.line(x1, y2, x2, y2, color);
+        self.line(x2, y2, x2, y1, color);
+        self.line(x2, y1, x1, y1, color);
+    }
+
     pub fn clear(&mut self, color: u8) {
         let x2 = self.width;
         let y2 = self.height;
