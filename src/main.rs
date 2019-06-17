@@ -195,7 +195,7 @@ fn main() -> ! {
     let _ = touch_xr.set_high();
 
     // Set yu input pin to analog mode.  Hardcoded for now!
-    modif!(GPIOC.moder: moder1 = 0b11);
+    modif!(GPIOC.moder: moder1 = @analog);
 
     // Activate and configure ADC.
     modif!(RCC.apb2enr: adc1en = true);

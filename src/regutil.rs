@@ -4,10 +4,12 @@ macro_rules! bitset {
     ($e:expr; $p:ident = true, $($tt:tt)+)    => { bitset!($e.$p().set_bit(); $($tt)+) };
     ($e:expr; $p:ident = false, $($tt:tt)+)   => { bitset!($e.$p().clear_bit(); $($tt)+) };
     ($e:expr; $p:ident = bit($v:expr), $($tt:tt)+) => { bitset!($e.$p().bit($v); $($tt)+) };
+    ($e:expr; $p:ident = @$v:ident, $($tt:tt)+) => { bitset!($e.$p().$v(); $($tt)+) };
     ($e:expr; $p:ident = $v:expr, $($tt:tt)+) => { bitset!($e.$p().bits($v); $($tt)+) };
     ($e:expr; $p:ident = true)    => { $e.$p().set_bit() };
     ($e:expr; $p:ident = false)   => { $e.$p().clear_bit() };
     ($e:expr; $p:ident = bit($v:expr)) => { $e.$p().bit($v) };
+    ($e:expr; $p:ident = @$v:ident) => { $e.$p().$v() };
     ($e:expr; $p:ident = $v:expr) => { $e.$p().bits($v) };
 }
 
