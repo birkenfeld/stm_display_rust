@@ -91,8 +91,8 @@ impl DisplayState {
         &mut self.con
     }
 
-    pub fn graphics(&mut self) -> &mut FrameBuffer {
-        &mut self.gfx
+    pub fn split(&mut self) -> (&mut FrameBuffer, &mut Console) {
+        (&mut self.gfx, &mut self.con)
     }
 
     pub fn process_byte(&mut self, ch: u8) -> Action {

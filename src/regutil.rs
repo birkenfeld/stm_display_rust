@@ -1,19 +1,4 @@
-//! Utility macros/functions.
-
-use hal::delay::Delay;
-use embedded_hal::prelude::*;
-
-pub trait DelayExt {
-    fn delay(&mut self, ms: u32);
-}
-
-impl DelayExt for Delay {
-    fn delay(&mut self, ms: u32) {
-        for _ in 0..ms/10 {
-            self.delay_ms(10u32);
-        }
-    }
-}
+//! Utility macros for working on registers.
 
 macro_rules! bitset {
     ($e:expr; $p:ident = true, $($tt:tt)+)    => { bitset!($e.$p().set_bit(); $($tt)+) };

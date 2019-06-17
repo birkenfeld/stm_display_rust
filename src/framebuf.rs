@@ -5,6 +5,11 @@ use bresenham::Bresenham;
 
 pub type Colors = [u8; 4];
 
+pub const BLACK_ON_WHITE: &[u8; 4] = &[15, 7, 8, 0];
+pub const RED_ON_WHITE: &[u8; 4] = &[15, 217, 203, 160];
+pub const GREEN_ON_WHITE: &[u8; 4] = &[15, 156, 82, 34];
+
+
 pub struct Font {
     /// Bitmap data, in 2bpp.
     data:  &'static [u8],
@@ -33,7 +38,8 @@ pub const FONTS: &[Font] = &[
     include!("font_light.rs"),
 ];
 
-pub const CONSOLEFONT: &'static Font = &FONTS[0];
+pub const CONSOLEFONT: &Font = &FONTS[0];
+pub const MEDIUMFONT: &Font = &FONTS[1];
 
 pub struct FrameBuffer {
     buf: &'static mut [u8],
