@@ -323,16 +323,16 @@ fn main() -> ! {
         disp.graphics().text(FONT, 176, 0, b"Self test active", C_B);
         disp.graphics().text(FONT, 16, 32, b"Touch anywhere to cycle through colors.", C_B);
         disp.graphics().text(FONT, 16, 48, b"Make sure no pixel errors are present.", C_B);
-        while !TOUCH_EVT.dequeue().is_some() { }
+        wait_touch();
 
         disp.graphics().clear(1);
-        while !TOUCH_EVT.dequeue().is_some() { }
+        wait_touch();
         disp.graphics().clear(2);
-        while !TOUCH_EVT.dequeue().is_some() { }
+        wait_touch();
         disp.graphics().clear(4);
-        while !TOUCH_EVT.dequeue().is_some() { }
+        wait_touch();
         disp.graphics().clear(15);
-        while !TOUCH_EVT.dequeue().is_some() { }
+        wait_touch();
 
         // #2. Flash memory
         disp.graphics().clear(15);
@@ -371,17 +371,12 @@ fn main() -> ! {
         disp.graphics().text(FONT, P_X, P_Y+32, b"UART......", C_B);
 
         let mut failed = false;
-        'outer: for &c1 in DATA {
-            disp.console().write_to_host(&[c1]);
-            loop {
-                if let Some(c2) = UART_RX.dequeue() {
-                    if c1 != c2 {
-                        disp.graphics().text(FONT, P_X2, P_Y+32, b"FAIL", C_R);
-                        failed = true;
-                        break 'outer;
-                    }
-                    break;
-                }
+        for &ch in DATA {
+            disp.console().write_to_host(&[ch]);
+            if wait_uart() != ch {
+                disp.graphics().text(FONT, P_X2, P_Y+32, b"FAIL", C_R);
+                failed = true;
+                break;
             }
         }
         if !failed {
@@ -392,28 +387,17 @@ fn main() -> ! {
         disp.graphics().text(FONT, P_X, P_Y+48, b"Touch.....", C_B);
         disp.graphics().rect_outline(8, 20, 120, 120, 0);
         disp.graphics().text(FONT, 20, 56, b"Touch here", C_B);
-        loop {
-            if let Some(x) = TOUCH_EVT.dequeue() {
-                if x < 1700 {
-                    disp.graphics().rect(8, 20, 121, 121, 15);
-                    break;
-                }
-            }
-        }
+        while wait_touch().0 > 106 {}
+        disp.graphics().rect(8, 20, 121, 121, 15);
+
         disp.graphics().rect_outline(352, 20, 472, 120, 0);
         disp.graphics().text(FONT, 364, 56, b"Touch here", C_B);
-        loop {
-            if let Some(x) = TOUCH_EVT.dequeue() {
-                if x > 3000 {
-                    disp.graphics().rect(352, 20, 473, 121, 15);
-                    disp.graphics().text(FONT, P_X2, P_Y+48, b"OK", C_G);
-                    break;
-                }
-            }
-        }
+        while wait_touch().0 < 218 {}
+        disp.graphics().rect(352, 20, 473, 121, 15);
+        disp.graphics().text(FONT, P_X2, P_Y+48, b"OK", C_G);
 
         disp.graphics().text(FONT, 16, 96, b"Touch anywhere to exit self test mode.", C_B);
-        while !TOUCH_EVT.dequeue().is_some() { }
+        wait_touch();
     }
 
     // Switch to console if nothing else programmed
@@ -476,30 +460,21 @@ fn konami_mode(disp: &mut interface::DisplayState) {
     disp.graphics().rect_outline(364, 8, 472, 120, 0);
     disp.graphics().text(FONT, 380, 56, b"Cancel", C_B);
 
-    // TODO: helper for getting touch, converting coordinates?
-    let text: &[u8] = loop {
-        if let Some(x) = TOUCH_EVT.dequeue() {
-            match x >> 4 {
-                xx if xx < 106 => {
-                    break b"Resetting";
-                },
-                xx if xx < 162 => {
-                    break b"Reinstalling";
-                }
-                _ => {
-                    if was_gfx {
-                        disp.graphics().clear(0);
-                    } else {
-                        disp.console().activate();
-                    }
-                    return;
-                }
+    let action: &[u8] = match wait_touch().0 {
+        x if x < 106 => b"Resetting",
+        x if x < 162 => b"Reinstalling",
+        _ => {
+            if was_gfx {
+                disp.graphics().clear(0);
+            } else {
+                disp.console().activate();
             }
+            return;
         }
     };
 
     disp.graphics().clear(15);
-    disp.graphics().text(FONT, 20, 30, text, C_R);
+    disp.graphics().text(FONT, 20, 30, action, C_R);
     let mut uart_ring = wheelbuf::WheelBuf::new([0u8; 8]);
     loop {
         if let Some(ch) = UART_RX.dequeue() {
@@ -518,7 +493,7 @@ fn konami_mode(disp: &mut interface::DisplayState) {
                 for &ch in b"imgexec ".iter().chain(PXE_SCRIPT).chain(b"\n") {
                     // firmware keyboard buffer is only ~15 chars, need to wait...
                     disp.console().write_to_host(&[ch]);
-                    while UART_RX.dequeue().is_none() {}
+                    wait_uart();
                 }
                 // PXE is booting, back to normal mode to let the user know
                 // what's happening
@@ -526,6 +501,24 @@ fn konami_mode(disp: &mut interface::DisplayState) {
                 return;
             }
         }
+    }
+}
+
+fn wait_touch() -> (u8, u8) {
+    loop {
+        if let Some(x) = TOUCH_EVT.dequeue() {
+            return ((x >> 4) as u8, 0);
+        }
+        arm::asm::wfi();
+    }
+}
+
+fn wait_uart() -> u8 {
+    loop {
+        if let Some(x) = UART_RX.dequeue() {
+            return x;
+        }
+        arm::asm::wfi();
     }
 }
 
