@@ -1,7 +1,7 @@
 //! Communication with the I2C EEPROM using bit-banging.
 #![allow(unused)]
 
-use arm;
+use cortex_m::asm;
 use hal::gpio::{gpioc, Output, OpenDrain};
 use embedded_hal::digital::v2::{InputPin, OutputPin};
 
@@ -19,7 +19,7 @@ impl I2CEEprom {
         Self { scl, sda }
     }
 
-    fn delay(&self) { arm::asm::delay(50); }
+    fn delay(&self) { asm::delay(50); }
 
     fn start_cond(&mut self) {
         self.sda.set_high();
@@ -114,7 +114,7 @@ impl I2CEEprom {
             self.write_byte(byte)?;
         }
         self.stop_cond();
-        arm::asm::delay(1_000_000);  // wait 5ms write time
+        asm::delay(1_000_000);  // wait 5ms write time
         Ok(())
     }
 

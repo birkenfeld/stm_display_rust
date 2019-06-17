@@ -5,6 +5,7 @@ extern crate panic_semihosting;
 
 use stm32f4::stm32f429 as stm;
 use stm::interrupt;
+use cortex_m::{asm, interrupt as interrupts};
 use cortex_m_rt::ExceptionFrame;
 use heapless::mpmc::{Q16, Q64};
 use hal::time::*;
@@ -83,7 +84,7 @@ static TOUCH_EVT: Q16<u16> = Q16::new();
 #[cortex_m_rt::entry]
 fn main() -> ! {
     // let mut stdout = hio::hstdout().unwrap();
-    let pcore = arm::Peripherals::take().unwrap();
+    let pcore = cortex_m::Peripherals::take().unwrap();
     let peri = stm::Peripherals::take().unwrap();
 
     // Configure clock
@@ -351,7 +352,7 @@ fn wait_touch() -> (u8, u8) {
         if let Some(x) = TOUCH_EVT.dequeue() {
             return ((x >> 4) as u8, 0);
         }
-        arm::asm::wfi();
+        asm::wfi();
     }
 }
 
@@ -360,7 +361,7 @@ fn recv_uart() -> u8 {
         if let Some(x) = UART_RX.dequeue() {
             return x;
         }
-        arm::asm::wfi();
+        asm::wfi();
     }
 }
 
@@ -428,24 +429,24 @@ const SCB_AIRCR_RESET: u32 = 0x05FA_0004;
 
 pub fn reset(scb: stm::SCB) -> ! {
     unsafe {
-        arm::interrupt::disable();
-        arm::asm::dsb();
+        interrupts::disable();
+        asm::dsb();
         // Do a soft-reset of the cpu
         scb.aircr.write(SCB_AIRCR_RESET);
-        arm::asm::dsb();
+        asm::dsb();
         unreachable!()
     }
 }
 
 pub fn reset_to_bootloader<O: OutputPin>(scb: stm::SCB, mut pin: O) -> ! {
     unsafe {
-        arm::interrupt::disable();
+        interrupts::disable();
         // Set Boot0 high (keeps high through reset via RC circuit)
         let _ = pin.set_high();
-        arm::asm::delay(10000);
-        arm::asm::dsb();
+        asm::delay(10000);
+        asm::dsb();
         scb.aircr.write(SCB_AIRCR_RESET);
-        arm::asm::dsb();
+        asm::dsb();
         unreachable!()
     }
 }
