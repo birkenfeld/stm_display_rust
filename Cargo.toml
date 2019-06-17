@@ -24,8 +24,7 @@ embedded-hal = "0.2.2"
 stm32f4 = "0.7.0"
 
 [dependencies.heapless]
-version = "0.4.2"
-features = ["const-fn", "smaller-atomics"]
+version = "0.5.0-alpha.2"
 
 [dependencies.hal]
 package = "stm32f4xx-hal"

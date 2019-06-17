@@ -6,9 +6,7 @@ extern crate panic_semihosting;
 use stm32f4::stm32f429 as stm;
 use stm::interrupt;
 use cortex_m_rt::ExceptionFrame;
-// TODO: use new mpmc queue
-use heapless::spsc::{SingleCore, Queue};
-use heapless::consts::*;
+use heapless::mpmc::{Q16, Q64};
 use hal::time::*;
 use hal::timer::{Timer, Event};
 use hal::serial::{Serial, config::Config as SerialConfig};
@@ -75,10 +73,10 @@ static CURSORBUF: [u8; CHARW as usize] = [CURSOR_COLOR; CHARW as usize];
 static CURSOR_ENABLED: AtomicBool = AtomicBool::new(false);
 
 // UART receive buffer
-static mut UART_RX: Queue<u8, U1024, u16, SingleCore> = unsafe { Queue::u16_sc() };
+static UART_RX: Q64<u8> = Q64::new();
 
 // Touch event buffer
-static mut TOUCH_EVT: Queue<u16, U16, u8> = Queue::u8();
+static TOUCH_EVT: Q16<u16> = Q16::new();
 
 #[cortex_m_rt::entry]
 fn main() -> ! {
@@ -304,9 +302,6 @@ fn main() -> ! {
     modif!(USART1.cr1: rxneie = true);
     nvic.enable(stm::Interrupt::USART1);
 
-    let mut uart = unsafe { UART_RX.split().1 };
-    let mut touch = unsafe { TOUCH_EVT.split().1 };
-
     if testmode_pin.is_high().unwrap() {
         // Test mode TODO: move to its own module?
         const C_B: &[u8; 4] = &[15, 7, 8, 0];
@@ -327,16 +322,16 @@ fn main() -> ! {
         disp.graphics().text(FONT, 176, 0, b"Self test active", C_B);
         disp.graphics().text(FONT, 16, 32, b"Touch anywhere to cycle through colors.", C_B);
         disp.graphics().text(FONT, 16, 48, b"Make sure no pixel errors are present.", C_B);
-        while !touch.dequeue().is_some() { }
+        while !TOUCH_EVT.dequeue().is_some() { }
 
         disp.graphics().clear(1);
-        while !touch.dequeue().is_some() { }
+        while !TOUCH_EVT.dequeue().is_some() { }
         disp.graphics().clear(2);
-        while !touch.dequeue().is_some() { }
+        while !TOUCH_EVT.dequeue().is_some() { }
         disp.graphics().clear(4);
-        while !touch.dequeue().is_some() { }
+        while !TOUCH_EVT.dequeue().is_some() { }
         disp.graphics().clear(15);
-        while !touch.dequeue().is_some() { }
+        while !TOUCH_EVT.dequeue().is_some() { }
 
         // #2. Flash memory
         disp.graphics().clear(15);
@@ -378,7 +373,7 @@ fn main() -> ! {
         'outer: for &c1 in DATA {
             disp.console().write_to_host(&[c1]);
             loop {
-                if let Some(c2) = uart.dequeue() {
+                if let Some(c2) = UART_RX.dequeue() {
                     if c1 != c2 {
                         disp.graphics().text(FONT, P_X2, P_Y+32, b"FAIL", C_R);
                         failed = true;
@@ -397,7 +392,7 @@ fn main() -> ! {
         disp.graphics().rect_outline(8, 20, 120, 120, 0);
         disp.graphics().text(FONT, 20, 56, b"Touch here", C_B);
         loop {
-            if let Some(x) = touch.dequeue() {
+            if let Some(x) = TOUCH_EVT.dequeue() {
                 if x < 1700 {
                     disp.graphics().rect(8, 20, 121, 121, 15);
                     break;
@@ -407,7 +402,7 @@ fn main() -> ! {
         disp.graphics().rect_outline(352, 20, 472, 120, 0);
         disp.graphics().text(FONT, 364, 56, b"Touch here", C_B);
         loop {
-            if let Some(x) = touch.dequeue() {
+            if let Some(x) = TOUCH_EVT.dequeue() {
                 if x > 3000 {
                     disp.graphics().rect(352, 20, 473, 121, 15);
                     disp.graphics().text(FONT, P_X2, P_Y+48, b"OK", C_G);
@@ -417,7 +412,7 @@ fn main() -> ! {
         }
 
         disp.graphics().text(FONT, 16, 96, b"Touch anywhere to exit self test mode.", C_B);
-        while !touch.dequeue().is_some() { }
+        while !TOUCH_EVT.dequeue().is_some() { }
     }
 
     // Switch to console if nothing else programmed
@@ -427,7 +422,8 @@ fn main() -> ! {
     let mut startup_buf = [0; 256];
     if let Ok(code) = eeprom.read_stored_entry(0, 64, &mut startup_buf) {
         for &byte in code {
-            unsafe { UART_RX.enqueue_unchecked(byte); }
+            // TODO: might not fit into 64 bytes!
+            let _ = UART_RX.enqueue(byte);
         }
     }
 
@@ -435,15 +431,15 @@ fn main() -> ! {
 
     // Normal main loop: process input from UART
     loop {
-        if let Some(x) = touch.dequeue() {
+        if let Some(x) = TOUCH_EVT.dequeue() {
             let x = (x >> 4) as u8;
             disp.process_touch(x, 0);
             touch_ring.push(if x < 106 { 1 } else if x < 162 { 2 } else if x < 218 { 3 } else { 4 });
             if touch_ring.iter().eq(&[2, 2, 3, 3, 1, 4, 1, 4]) {
-                konami_mode(&mut disp, &mut uart, &mut touch);
+                konami_mode(&mut disp);
             }
         }
-        if let Some(ch) = uart.dequeue() {
+        if let Some(ch) = UART_RX.dequeue() {
             match disp.process_byte(ch) {
                 Action::None => (),
                 Action::Reset => reset(pcore.SCB),
@@ -461,9 +457,7 @@ const PXE_SCRIPT: &[u8] = b"http://ictrlfs.ictrl.frm2/public/echo.pxe";
 // TODO:
 // * move to other module
 // * make it more modular, add helpers
-fn konami_mode(disp: &mut interface::DisplayState,
-               uart: &mut heapless::spsc::Consumer<'_, u8, U1024, u16, SingleCore>,
-               touch: &mut heapless::spsc::Consumer<'_, u16, U16, u8>) {
+fn konami_mode(disp: &mut interface::DisplayState) {
     const FONT: &framebuf::Font = &framebuf::FONTS[1];
     const C_B: &[u8; 4] = &[15, 7, 8, 0];
     const C_R: &[u8; 4] = &[15, 217, 203, 160];
@@ -483,7 +477,7 @@ fn konami_mode(disp: &mut interface::DisplayState,
 
     // TODO: helper for getting touch, converting coordinates?
     let text: &[u8] = loop {
-        if let Some(x) = touch.dequeue() {
+        if let Some(x) = TOUCH_EVT.dequeue() {
             match x >> 4 {
                 xx if xx < 106 => {
                     break b"Resetting";
@@ -507,7 +501,7 @@ fn konami_mode(disp: &mut interface::DisplayState,
     disp.graphics().text(FONT, 20, 30, text, C_R);
     let mut uart_ring = wheelbuf::WheelBuf::new([0u8; 8]);
     loop {
-        if let Some(ch) = uart.dequeue() {
+        if let Some(ch) = UART_RX.dequeue() {
             let _ = uart_ring.push(ch);
             if uart_ring.iter().eq(b"PXE boot") {
                 // activate the "press N for PXE boot" option
@@ -523,7 +517,7 @@ fn konami_mode(disp: &mut interface::DisplayState,
                 for &ch in b"imgexec ".iter().chain(PXE_SCRIPT).chain(b"\n") {
                     // firmware keyboard buffer is only ~15 chars, need to wait...
                     disp.console().write_to_host(&[ch]);
-                    while uart.dequeue().is_none() {}
+                    while UART_RX.dequeue().is_none() {}
                 }
                 // PXE is booting, back to normal mode to let the user know
                 // what's happening
@@ -553,7 +547,7 @@ fn TIM3() {
 #[stm::interrupt]
 fn USART1() {
     let data = read!(USART1.dr: dr) as u8;
-    unsafe { let _ = UART_RX.split().0.enqueue(data); }
+    let _ = UART_RX.enqueue(data);
 }
 
 const THRESHOLD: u16 = 500;
@@ -574,7 +568,7 @@ fn TIM4() {
     let mini = STATE.data.iter().cloned().min().unwrap();
     if !STATE.last && mini > THRESHOLD {
         let mean = STATE.data.iter().map(|&v| v as u32).sum::<u32>() / NSAMPLES as u32;
-        unsafe { let _ = TOUCH_EVT.split().0.enqueue(mean as u16); }
+        let _ = TOUCH_EVT.enqueue(mean as u16);
         STATE.last = true;
     } else if STATE.last && mini < THRESHOLD {
         STATE.last = false;
