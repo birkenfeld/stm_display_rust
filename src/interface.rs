@@ -76,6 +76,11 @@ fn pos_from_bytes(pos: &[u8]) -> (u16, u16) {
      (pos[0] >> 1) as u16)
 }
 
+fn pos_to_bytes(x: u16, y: u16) -> (u8, u8) {
+    (((y & 0x7F) | (x & 0x80)) as u8,
+     (x & 0xFF) as u8)
+}
+
 impl DisplayState {
     pub fn new(mut gfx: FrameBuffer, con: Console) -> Self {
         gfx.clear(255);
@@ -147,8 +152,9 @@ impl DisplayState {
         Action::None
     }
 
-    pub fn process_touch(&mut self, x: u8, y: u8) {
-        self.con.write_to_host(&[ESCAPE, ESCAPE, 0x03, CMD_TOUCH, x, y]);
+    pub fn process_touch(&mut self, x: u16, y: u16) {
+        let (b0, b1) = pos_to_bytes(x, y);
+        self.con.write_to_host(&[ESCAPE, ESCAPE, 0x03, CMD_TOUCH, b0, b1]);
     }
 
     pub fn process_command(&mut self, len: usize) -> Action {

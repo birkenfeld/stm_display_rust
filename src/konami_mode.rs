@@ -1,7 +1,10 @@
 //! Implementation of the "special" override mode of the display.
 
-use crate::{wait_touch, recv_uart, interface};
+use cortex_m::asm;
+use crate::{wait_touch, recv_uart, interface, framebuf};
 use crate::framebuf::{MEDIUMFONT as FONT, BLACK_ON_WHITE, RED_ON_WHITE};
+
+pub const ACTIVATION: &[u16] = &[1, 1, 2, 2, 0, 3, 0, 3];
 
 const PXE_SCRIPT: &[u8] = b"http://ictrlfs.ictrl.frm2/public/echo.pxe";
 
@@ -22,10 +25,15 @@ pub fn run(disp: &mut interface::DisplayState) {
     gfx.rect_outline(364, 8, 472, 120, 0);
     gfx.text(FONT, 380, 56, b"Cancel", BLACK_ON_WHITE);
 
+    // TODO: clear all incoming uart data after selection is made?
+
     let action: &[u8] = match wait_touch().0 {
-        x if x < 106 => b"Resetting",
-        x if x < 162 => b"Reinstalling",
-        _ => {
+        x if x < 120 => b"Resetting",
+        x if x < 240 => b"Reinstalling",
+        x => {
+            if x < 360 {
+                explode(gfx);
+            }
             if was_gfx {
                 gfx.clear(0);
             } else {
@@ -62,5 +70,29 @@ pub fn run(disp: &mut interface::DisplayState) {
             con.activate();
             return;
         }
+    }
+}
+
+
+fn explode(gfx: &mut framebuf::FrameBuffer) {
+    for i in 0..=240 {
+        if i >= 120 {
+            let j = i - 120;
+            gfx.rect(240 - j, 64 - j.min(64), 240 + j + 1, 64 + j.min(64), 11);
+            gfx.rect(240 - i, 0, 240 - j, 128, 1);
+            gfx.rect(240 + j + 1, 0, 240 + i + 1, 128, 1);
+        } else {
+            gfx.rect(240 - i, 64 - i.min(64), 240 + i + 1, 64 + i.min(64), 1);
+        }
+        asm::delay(1000000);
+    }
+    for _ in 0..5 {
+        asm::delay(20000000);
+        gfx.rect(190, 44, 291, 85, 11);
+        asm::delay(20000000);
+        gfx.text(&framebuf::FONTS[2], 190, 44, b"BOOM?", &[11, 214, 202, 9]);
+    }
+    for _ in 0..10 {
+        asm::delay(20000000);
     }
 }

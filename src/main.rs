@@ -322,15 +322,25 @@ fn main() -> ! {
         }
     }
 
-    let mut touch_ring = wheelbuf::WheelBuf::new([0u8; 8]);
+    /* -- Touch calibration mode --
+    let (gfx, _) = disp.split();
+    gfx.activate();
+    gfx.clear(15);
+    loop {
+        let (x, _) = wait_touch();
+        gfx.rect(x - 1, 0, x + 2, 128, 4);
+    }
+    */
+
+    let mut touch_ring = wheelbuf::WheelBuf::new([0u16; 8]);
 
     // Normal main loop: process input from UART
     loop {
-        if let Some(x) = TOUCH_EVT.dequeue() {
-            let x = (x >> 4) as u8;
-            disp.process_touch(x, 0);
-            touch_ring.push(if x < 106 { 1 } else if x < 162 { 2 } else if x < 218 { 3 } else { 4 });
-            if touch_ring.iter().eq(&[2, 2, 3, 3, 1, 4, 1, 4]) {
+        if let Some(ev) = TOUCH_EVT.dequeue() {
+            let (x, y) = convert_touch(ev);
+            disp.process_touch(x, y);
+            touch_ring.push(x / 120);
+            if touch_ring.iter().eq(konami_mode::ACTIVATION) {
                 konami_mode::run(&mut disp);
             }
         }
@@ -347,10 +357,15 @@ fn main() -> ! {
     }
 }
 
-fn wait_touch() -> (u8, u8) {
+fn convert_touch(ev: u16) -> (u16, u16) {
+    let x = (ev / 6) - 150;
+    (x, 0)
+}
+
+fn wait_touch() -> (u16, u16) {
     loop {
-        if let Some(x) = TOUCH_EVT.dequeue() {
-            return ((x >> 4) as u8, 0);
+        if let Some(ev) = TOUCH_EVT.dequeue() {
+            return convert_touch(ev);
         }
         asm::wfi();
     }
@@ -358,8 +373,8 @@ fn wait_touch() -> (u8, u8) {
 
 fn recv_uart() -> u8 {
     loop {
-        if let Some(x) = UART_RX.dequeue() {
-            return x;
+        if let Some(ch) = UART_RX.dequeue() {
+            return ch;
         }
         asm::wfi();
     }

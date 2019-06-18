@@ -25,11 +25,11 @@ pub fn run<T1, T2: OutputPin>(disp: &mut interface::DisplayState,
     gfx.text(FONT, 16, 48, b"Make sure no pixel errors are present.", BLACK_ON_WHITE);
     wait_touch();
 
-    gfx.clear(1);
+    gfx.clear(9);
     wait_touch();
-    gfx.clear(2);
+    gfx.clear(10);
     wait_touch();
-    gfx.clear(4);
+    gfx.clear(12);
     wait_touch();
     gfx.clear(15);
     wait_touch();
@@ -87,12 +87,12 @@ pub fn run<T1, T2: OutputPin>(disp: &mut interface::DisplayState,
     gfx.text(FONT, P_X, P_Y+48, b"Touch.....", BLACK_ON_WHITE);
     gfx.rect_outline(8, 20, 120, 120, 0);
     gfx.text(FONT, 20, 56, b"Touch here", BLACK_ON_WHITE);
-    while wait_touch().0 > 106 {}
+    while wait_touch().0 > 120 {}
     gfx.rect(8, 20, 121, 121, 15);
 
     gfx.rect_outline(352, 20, 472, 120, 0);
     gfx.text(FONT, 364, 56, b"Touch here", BLACK_ON_WHITE);
-    while wait_touch().0 < 218 {}
+    while wait_touch().0 < 364 {}
     gfx.rect(352, 20, 473, 121, 15);
     gfx.text(FONT, P_X2, P_Y+48, b"OK", GREEN_ON_WHITE);
 
