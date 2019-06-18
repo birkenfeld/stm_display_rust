@@ -194,6 +194,10 @@ fn main() -> ! {
     let mut touch_xr = gpioc.pc3.into_push_pull_output();
     let _ = touch_xr.set_high();
 
+    // Pin for resetting the APU
+    let mut reset_pin = gpioc.pc8.into_open_drain_output();
+    let _ = reset_pin.set_high();
+
     // Set yu input pin to analog mode.  Hardcoded for now!
     modif!(GPIOC.moder: moder1 = @analog);
 
@@ -341,7 +345,7 @@ fn main() -> ! {
             disp.process_touch(x, y);
             touch_ring.push(x / 120);
             if touch_ring.iter().eq(konami_mode::ACTIVATION) {
-                konami_mode::run(&mut disp);
+                konami_mode::run(&mut disp, &mut reset_pin);
             }
         }
         if let Some(ch) = UART_RX.dequeue() {
@@ -378,6 +382,10 @@ fn recv_uart() -> u8 {
         }
         asm::wfi();
     }
+}
+
+fn clear_uart() {
+    while UART_RX.dequeue().is_some() {}
 }
 
 pub fn enable_cursor(en: bool) {

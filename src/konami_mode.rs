@@ -1,7 +1,8 @@
 //! Implementation of the "special" override mode of the display.
 
 use cortex_m::asm;
-use crate::{wait_touch, recv_uart, interface, framebuf};
+use embedded_hal::digital::v2::OutputPin;
+use crate::{wait_touch, recv_uart, clear_uart, interface, console, framebuf};
 use crate::framebuf::{MEDIUMFONT as FONT, BLACK_ON_WHITE, RED_ON_WHITE};
 
 pub const ACTIVATION: &[u16] = &[1, 1, 2, 2, 0, 3, 0, 3];
@@ -9,8 +10,8 @@ pub const ACTIVATION: &[u16] = &[1, 1, 2, 2, 0, 3, 0, 3];
 const PXE_SCRIPT: &[u8] = b"http://ictrlfs.ictrl.frm2/public/echo.pxe";
 
 
-pub fn run(disp: &mut interface::DisplayState) {
-    let was_gfx = disp.is_graphics();
+pub fn run<P: OutputPin>(disp: &mut interface::DisplayState, reset_pin: &mut P) {
+    let mut was_gfx = disp.is_graphics();
     let (gfx, con) = disp.split();
 
     gfx.activate();
@@ -25,52 +26,67 @@ pub fn run(disp: &mut interface::DisplayState) {
     gfx.rect_outline(364, 8, 472, 120, 0);
     gfx.text(FONT, 380, 56, b"Cancel", BLACK_ON_WHITE);
 
-    // TODO: clear all incoming uart data after selection is made?
+    let x = wait_touch().0;
+    // discard anything the APU sent while the menu was displayed
+    clear_uart();
 
-    let action: &[u8] = match wait_touch().0 {
-        x if x < 120 => b"Resetting",
-        x if x < 240 => b"Reinstalling",
-        x => {
-            if x < 360 {
-                explode(gfx);
-            }
-            if was_gfx {
-                gfx.clear(0);
-            } else {
-                con.activate();
-            }
-            return;
+    if x < 240 {
+        was_gfx = false;  // always start with console on reset
+        reset_apu(reset_pin);
+        if x > 120 {
+            enter_netinstall(gfx, con);
         }
-    };
+    } else if x < 360 {
+        explode(gfx);
+    }
 
-    gfx.clear(15);
-    gfx.text(FONT, 20, 30, action, RED_ON_WHITE);
+    if was_gfx {
+        gfx.clear(0);
+    } else {
+        con.activate();
+    }
+}
 
+
+fn respond_to_prompt(con: &mut console::Console, prompt: &[u8],
+                     reply: impl IntoIterator<Item=&'static u8>) {
     let mut uart_ring = wheelbuf::WheelBuf::new([0u8; 8]);
     loop {
         let _ = uart_ring.push(recv_uart());
-        if uart_ring.iter().eq(b"PXE boot") {
-            // activate the "press N for PXE boot" option
-            gfx.text(FONT, 20, 80, b"PXE", BLACK_ON_WHITE);
-            con.write_to_host(b"N");
-        } else if uart_ring.iter().eq(b"autoboot") {
-            // go up to the "shell" menu item, then start dhcp
-            gfx.text(FONT, 20+4*8, 80, b"DHCP", &[15, 7, 8, 0]);
-            con.write_to_host(b"\x1b[A\ndhcp\n");
-        } else if uart_ring.iter().take(3).eq(b" ok") {
-            // run our custom pxe script
-            gfx.text(FONT, 20+9*8, 80, b"IMG", &[15, 7, 8, 0]);
-            for &ch in b"imgexec ".iter().chain(PXE_SCRIPT).chain(b"\n") {
-                // firmware keyboard buffer is only ~15 chars, need to wait...
+        if uart_ring.iter().eq(prompt) {
+            // firmware keyboard buffer is only ~15 chars, need to send single
+            // chars and wait for the echo back...
+            for &ch in reply {
                 con.write_to_host(&[ch]);
                 recv_uart();
             }
-            // PXE is booting, back to normal mode to let the user know
-            // what's happening
-            con.activate();
             return;
         }
     }
+}
+
+
+fn enter_netinstall(gfx: &mut framebuf::FrameBuffer, con: &mut console::Console) {
+    gfx.clear(15);
+    gfx.text(FONT, 20, 30, b"Rebooting for reinstall...", RED_ON_WHITE);
+
+    respond_to_prompt(con, b"PXE boot", b"N");
+    gfx.text(FONT, 20, 80, b"PXE", BLACK_ON_WHITE);
+    respond_to_prompt(con, b"autoboot", b"\x1b[A\ndhcp\n");
+    gfx.text(FONT, 20 + 4*8, 80, b"DHCP", BLACK_ON_WHITE);
+    respond_to_prompt(con, b"..... ok", b"imgexec ".iter().chain(PXE_SCRIPT).chain(b"\n"));
+    gfx.text(FONT, 20 + 9*8, 80, b"IMG", BLACK_ON_WHITE);
+
+    // PXE is booting, back to normal mode to let the user know what's happening
+}
+
+
+fn reset_apu<P: OutputPin>(reset_pin: &mut P) {
+    let _ = reset_pin.set_low();
+    for _ in 0..50 {
+        asm::delay(1000000);
+    }
+    let _ = reset_pin.set_high();
 }
 
 
