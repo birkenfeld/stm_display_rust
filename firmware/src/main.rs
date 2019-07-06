@@ -18,28 +18,19 @@ use core::sync::atomic::{AtomicBool, Ordering};
 
 #[macro_use]
 mod regutil;
-mod icon;
 mod i2ceeprom;
 mod spiflash;
-mod interface;
-mod framebuf;
-mod console;
 mod test_mode;
 mod konami_mode;
 
-use crate::framebuf::FrameBuffer;
-use crate::interface::Action;
+use display::interface::Action;
+use display::{WIDTH, HEIGHT, CHARW, CHARH};
 
-/// Reply to host's identify query.
-const IDENT: [u8; 4] = [0x00, 0x00, 0x01, 0x00];
-
-/// Width and height of visible screen.
-const WIDTH: u16 = 480;
-const HEIGHT: u16 = 128;
-
-/// Size of a character in the console output.
-const CHARW: u16 = framebuf::CONSOLEFONT.size().0;
-const CHARH: u16 = framebuf::CONSOLEFONT.size().1;
+// Convenient type aliases for the instantiations of the generic library types
+// we're using in the firmware.  The three required types are implemented below.
+type DisplayState = display::interface::DisplayState<'static, WriteToHost, TouchHandler, FbImpl>;
+type Console = display::console::Console<'static, WriteToHost, FbImpl>;
+type FrameBuffer = display::framebuf::FrameBuffer<'static, FbImpl>;
 
 /// Horizontal display timing.
 const H_SYNCPULSE:  u16 = 11;
@@ -256,7 +247,7 @@ fn main() -> ! {
     // Frame buffer number of lines
     write!(LTDC.layer1.cfblnr: cfblnbr = HEIGHT);
     // Set up 256-color LUT
-    for (i, (r, g, b)) in console::get_lut_colors().enumerate() {
+    for (i, (r, g, b)) in display::console::get_lut_colors().enumerate() {
         write!(LTDC.layer1.clutwr: clutadd = i as u8, red = r, green = g, blue = b);
     }
 
@@ -296,13 +287,17 @@ fn main() -> ! {
     blink_timer.listen(Event::TimeOut);
     touch_timer.listen(Event::TimeOut);
 
-    let console = console::Console::new(
-        FrameBuffer::new(unsafe { &mut FB_CONSOLE }, WIDTH, HEIGHT, true),
-        console_tx
+    let fbimpls = FbImpl { width: WIDTH, has_cursor: true };
+    let console = display::console::Console::new(
+        FrameBuffer::new(unsafe { &mut FB_CONSOLE[..] }, WIDTH, HEIGHT, fbimpls),
+        WriteToHost(console_tx),
+        position_cursor as fn(_, _)
     );
-    let mut disp = interface::DisplayState::new(
-        FrameBuffer::new(unsafe { &mut FB_GRAPHICS }, WIDTH, HEIGHT, false),
-        console
+    let fbimpls = FbImpl { width: WIDTH, has_cursor: false };
+    let mut disp = display::interface::DisplayState::new(
+        FrameBuffer::new(unsafe { &mut FB_GRAPHICS[..] }, WIDTH, HEIGHT, fbimpls),
+        console,
+        TouchHandler { calib: (6, 150, 1, 0) }
     );
 
     // Activate USART receiver
@@ -374,6 +369,15 @@ fn clear_uart() {
 
 pub fn enable_cursor(en: bool) {
     CURSOR_ENABLED.store(en, Ordering::Relaxed);
+}
+
+fn position_cursor(cx: u16, cy: u16) {
+    write!(LTDC.layer2.whpcr: whstpos = H_WIN_START + cx*CHARW + 1,
+           whsppos = H_WIN_START + (cx + 1)*CHARW);
+    write!(LTDC.layer2.wvpcr: wvstpos = V_WIN_START + (cy + 1)*CHARH,
+           wvsppos = V_WIN_START + (cy + 1)*CHARH);
+    // reload on next vsync
+    write!(LTDC.srcr: vbr = true);
 }
 
 #[stm::interrupt]
@@ -455,5 +459,101 @@ pub fn reset_to_bootloader<O: OutputPin>(scb: stm::SCB, mut pin: O) -> ! {
         scb.aircr.write(SCB_AIRCR_RESET);
         asm::dsb();
         unreachable!()
+    }
+}
+
+// Implement the various target specific traits for the STM.
+
+pub struct WriteToHost(hal::serial::Tx<stm::USART1>);
+
+impl display::console::WriteToHost for WriteToHost {
+    fn write_byte(&mut self, byte: u8) {
+        use embedded_hal::serial::Write;
+        let _ = nb::block!(self.0.write(byte));
+    }
+}
+
+pub struct TouchHandler {
+    // touch event calibration data
+    calib: (u16, u16, u16, u16),
+}
+
+impl display::interface::TouchHandler for TouchHandler {
+    type Event = u16;
+
+    fn wait(&self) -> (u16, u16) {
+        loop {
+            if let Some(ev) = TOUCH_EVT.dequeue() {
+                return self.convert(ev);
+            }
+            asm::wfi();
+        }
+    }
+
+    fn convert(&self, ev: u16) -> (u16, u16) {
+        let x = (ev / self.calib.0) - self.calib.1;
+        (x, 0)
+    }
+
+    fn set_calib(&mut self, calib: (u16, u16, u16, u16)) {
+        self.calib = calib;
+    }
+}
+
+pub struct FbImpl {
+    width: u16,
+    has_cursor: bool,
+}
+
+impl display::framebuf::FbImpl for FbImpl {
+    fn fill_rect(&mut self, buf: &mut [u8], x1: u16, y1: u16, x2: u16, y2: u16, color: u8) {
+        // Since DMA2D's smallest register->memory transfer unit is 16 bit, split off
+        // the unaligned bytes here and draw them individually.
+        let dma_x1 = (x1 + 1) & !1;
+        let dma_x2 = x2 & !1;
+        let dma_nx = dma_x2 - dma_x1;
+        if dma_nx != 0 {
+            write!(DMA2D.ocolr: green = color, blue = color);
+            write!(DMA2D.opfccr: cm = 0b100); // ARGB4444, transfer 16bits at once
+            let offset = y1*self.width + dma_x1;
+            write!(DMA2D.omar: ma = buf.as_ptr().offset(offset as isize) as u32);
+            write!(DMA2D.oor: lo = (self.width - dma_nx) >> 1);
+            write!(DMA2D.nlr: pl = dma_nx >> 1, nl = y2 - y1);
+            modif!(DMA2D.cr: mode = 0b11, start = true);
+        }
+        if dma_x1 != x1 {
+            for y in y1..y2 {
+                buf[x1 as usize + (y * self.width) as usize] = color;
+            }
+        }
+        if dma_x2 != x2 {
+            for y in y1..y2 {
+                buf[x2 as usize - 1 + (y * self.width) as usize] = color;
+            }
+        }
+        if dma_nx != 0 {
+            wait_for!(DMA2D.cr: !start);
+        }
+    }
+
+    fn copy_rect(&mut self, buf: &mut [u8], x1: u16, y1: u16,
+                 x2: u16, y2: u16, nx: u16, ny: u16) {
+        let s_offset = y1*self.width + x1;
+        let d_offset = y2*self.width + x2;
+        write!(DMA2D.fgmar: ma = buf.as_ptr().offset(s_offset as isize) as u32);
+        write!(DMA2D.fgor: lo = self.width - nx);
+        write!(DMA2D.omar: ma = buf.as_ptr().offset(d_offset as isize) as u32);
+        write!(DMA2D.oor: lo = self.width - nx);
+        write!(DMA2D.nlr: pl = nx, nl = ny);
+        modif!(DMA2D.cr: mode = 0, start = true);
+        wait_for!(DMA2D.cr: !start);
+    }
+
+    fn activate(&self, buf: &mut [u8]) {
+        // Color frame buffer start address
+        write!(LTDC.layer1.cfbar: cfbadd = buf.as_ptr() as u32);
+        // reload on next vsync
+        write!(LTDC.srcr: vbr = true);
+        enable_cursor(self.has_cursor);
     }
 }

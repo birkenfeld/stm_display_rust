@@ -1,6 +1,6 @@
 [package]
-name = "stm_display"
-version = "0.0.1"
+name = "display_firmware"
+version = "0.1.0"
 authors = ["Georg Brandl <g.brandl@fz-juelich.de>"]
 description = "Firmware for MLZ control box display"
 license = "GPL-2.0+"
@@ -13,8 +13,6 @@ debug = true
 
 [dependencies]
 nb = "0.1.1"
-btoi = { version = "0.4.0", default-features = false }
-bresenham = "0.1.1"
 wheelbuf = "0.2"
 cortex-m = "0.6.0"
 cortex-m-rt = "0.6.6"
@@ -30,3 +28,6 @@ version = "0.5.0-alpha.2"
 package = "stm32f4xx-hal"
 version = "0.5.0"
 features = ["rt", "stm32f429"]
+
+[dependencies.display]
+path = "../lib"

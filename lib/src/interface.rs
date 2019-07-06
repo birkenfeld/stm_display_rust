@@ -1,10 +1,8 @@
 //! The command interface to a client.
 
-use cortex_m::asm;
-use crate::TOUCH_EVT;
 use crate::icon::ICONS;
-use crate::console::Console;
-use crate::framebuf::{FONTS, FrameBuffer};
+use crate::console::{Console, WriteToHost};
+use crate::framebuf::{FONTS, FrameBuffer, FbImpl};
 
 const ESCAPE:            u8 = 0x1b;
 
@@ -51,31 +49,17 @@ pub struct GraphicsSetting {
     pub color: [u8; 4],
 }
 
-pub struct TouchHandler {
-    // touch event calibration data
-    calib: (u16, u16, u16, u16),
+pub trait TouchHandler {
+    type Event;
+    fn wait(&self) -> (u16, u16);
+    fn convert(&self, ev: Self::Event) -> (u16, u16);
+    fn set_calib(&mut self, data: (u16, u16, u16, u16));
 }
 
-impl TouchHandler {
-    pub fn wait(&self) -> (u16, u16) {
-        loop {
-            if let Some(ev) = TOUCH_EVT.dequeue() {
-                return self.convert(ev);
-            }
-            asm::wfi();
-        }
-    }
-
-    pub fn convert(&self, ev: u16) -> (u16, u16) {
-        let x = (ev / self.calib.0) - self.calib.1;
-        (x, 0)
-    }
-}
-
-pub struct DisplayState {
-    gfx: FrameBuffer,
-    con: Console,
-    touch: TouchHandler,
+pub struct DisplayState<'buf, Tx, Th, Impl> {
+    gfx: FrameBuffer<'buf, Impl>,
+    con: Console<'buf, Tx, Impl>,
+    touch: Th,
     cur: GraphicsSetting,
     saved: [GraphicsSetting; 32],
     escape: Escape,
@@ -111,14 +95,14 @@ fn pos_to_bytes(x: u16, y: u16) -> (u8, u8) {
      (x & 0xFF) as u8)
 }
 
-impl DisplayState {
-    pub fn new(mut gfx: FrameBuffer, con: Console) -> Self {
+impl<'buf, Tx: WriteToHost, Th: TouchHandler, Fb: FbImpl> DisplayState<'buf, Tx, Th, Fb> {
+    pub fn new(mut gfx: FrameBuffer<'buf, Fb>, con: Console<'buf, Tx, Fb>, touch: Th) -> Self {
         gfx.clear(255);
         Self {
             gfx, con, cur: Default::default(), saved: Default::default(),
             escape: Escape::None, escape_seq: [0; 256],
             gfx_mode: false, fwd_touch: false,
-            touch: TouchHandler { calib: (6, 150, 1, 0) },
+            touch,
         }
     }
 
@@ -126,11 +110,15 @@ impl DisplayState {
         self.gfx_mode
     }
 
-    pub fn console(&mut self) -> &mut Console {
+    pub fn console(&mut self) -> &mut Console<'buf, Tx, Fb> {
         &mut self.con
     }
 
-    pub fn split(&mut self) -> (&mut FrameBuffer, &mut Console, &TouchHandler) {
+    pub fn graphics(&mut self) -> &mut FrameBuffer<'buf, Fb> {
+        &mut self.gfx
+    }
+
+    pub fn split(&mut self) -> (&mut FrameBuffer<'buf, Fb>, &mut Console<'buf, Tx, Fb>, &Th) {
         (&mut self.gfx, &mut self.con, &self.touch)
     }
 
@@ -186,7 +174,7 @@ impl DisplayState {
         Action::None
     }
 
-    pub fn process_touch(&mut self, ev: u16) -> (u16, u16) {
+    pub fn process_touch(&mut self, ev: Th::Event) -> (u16, u16) {
         let (x, y) = self.touch.convert(ev);
         if self.fwd_touch {
             let (b0, b1) = pos_to_bytes(x, y);
@@ -301,8 +289,8 @@ impl DisplayState {
                 self.fwd_touch = cmd[2] > 0;
             }
             CMD_TOUCH_CALIB => if data_len >= 4 {
-                self.touch.calib = (cmd[2] as u16, cmd[3] as u16,
-                                    cmd[4] as u16, cmd[5] as u16);
+                self.touch.set_calib((cmd[2] as u16, cmd[3] as u16,
+                                      cmd[4] as u16, cmd[5] as u16));
             }
             CMD_IDENT => {
                 self.con.write_to_host(&[0x1b, 0x1b, 0x05, 0xf3]);

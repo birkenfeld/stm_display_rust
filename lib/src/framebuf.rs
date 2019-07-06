@@ -1,6 +1,5 @@
 //! Basic framebuffer abstraction and drawing routines.
 
-use crate::stm;
 use bresenham::Bresenham;
 
 pub type Colors = [u8; 4];
@@ -41,24 +40,34 @@ pub const FONTS: &[Font] = &[
 pub const CONSOLEFONT: &Font = &FONTS[0];
 pub const MEDIUMFONT: &Font = &FONTS[1];
 
-pub struct FrameBuffer {
-    buf: &'static mut [u8],
+pub trait FbImpl {
+    fn fill_rect(&mut self, buf: &mut [u8], x1: u16, y1: u16, x2: u16, y2: u16, color: u8);
+    fn copy_rect(&mut self, buf: &mut [u8], x1: u16, y1: u16, x2: u16, y2: u16, nx: u16, ny: u16);
+    fn activate(&self, buf: &mut [u8]);
+}
+
+pub struct FrameBuffer<'buf, Fb> {
+    buf: &'buf mut [u8],
     width: u16,
     height: u16,
     clip1: (u16, u16),
     clip2: (u16, u16),
-    has_cursor: bool,
+    impls: Fb,
 }
 
-impl FrameBuffer {
-    pub fn new(buf: &'static mut [u8], width: u16, height: u16, has_cursor: bool) -> Self {
-        Self { buf, width, height, has_cursor, clip1: (0, 0), clip2: (width, height) }
+impl<'buf, Fb: FbImpl> FrameBuffer<'buf, Fb> {
+    pub fn new(buf: &'buf mut [u8], width: u16, height: u16, impls: Fb) -> Self {
+        Self { buf, width, height, impls, clip1: (0, 0), clip2: (width, height) }
+    }
+
+    pub fn buf(&self) -> &[u8] {
+        &self.buf
     }
 
     #[inline(always)]
     fn set_pixel(&mut self, x: u16, y: u16, color: u8) {
         if self.clip1.0 <= x && x < self.clip2.0 && self.clip1.1 <= y && y < self.clip2.1 {
-            self.buf[x as usize + (y * self.width) as usize] = color;
+            self.buf.as_mut()[x as usize + (y * self.width) as usize] = color;
         }
     }
 
@@ -128,33 +137,7 @@ impl FrameBuffer {
         y1 = y1.max(self.clip1.1).min(self.clip2.1);
         y2 = y2.max(y1).min(self.clip2.1);
 
-        // Since DMA2D's smallest register->memory transfer unit is 16 bit, split off
-        // the unaligned bytes here and draw them individually.
-        let dma_x1 = (x1 + 1) & !1;
-        let dma_x2 = x2 & !1;
-        let dma_nx = dma_x2 - dma_x1;
-        if dma_nx != 0 {
-            write!(DMA2D.ocolr: green = color, blue = color);
-            write!(DMA2D.opfccr: cm = 0b100); // ARGB4444, transfer 16bits at once
-            let offset = y1*self.width + dma_x1;
-            write!(DMA2D.omar: ma = self.buf.as_ptr().offset(offset as isize) as u32);
-            write!(DMA2D.oor: lo = (self.width - dma_nx) >> 1);
-            write!(DMA2D.nlr: pl = dma_nx >> 1, nl = y2 - y1);
-            modif!(DMA2D.cr: mode = 0b11, start = true);
-        }
-        if dma_x1 != x1 {
-            for y in y1..y2 {
-                self.set_pixel(x1, y, color);
-            }
-        }
-        if dma_x2 != x2 {
-            for y in y1..y2 {
-                self.set_pixel(x2 - 1, y, color);
-            }
-        }
-        if dma_nx != 0 {
-            wait_for!(DMA2D.cr: !start);
-        }
+        self.impls.fill_rect(self.buf.as_mut(), x1, y1, x2, y2, color);
     }
 
     pub fn copy_rect(&mut self, mut x1: u16, mut y1: u16, x2: u16, y2: u16, mut dx: u16, mut dy: u16) {
@@ -177,37 +160,18 @@ impl FrameBuffer {
         nx = nx.min(self.clip2.0 - dx);
         ny = ny.min(self.clip2.1 - dy);
 
-        let s_offset = y1*self.width + x1;
-        let d_offset = dy*self.width + dx;
-        write!(DMA2D.fgmar: ma = self.buf.as_ptr().offset(s_offset as isize) as u32);
-        write!(DMA2D.fgor: lo = self.width - nx);
-        write!(DMA2D.omar: ma = self.buf.as_ptr().offset(d_offset as isize) as u32);
-        write!(DMA2D.oor: lo = self.width - nx);
-        write!(DMA2D.nlr: pl = nx, nl = ny);
-        modif!(DMA2D.cr: mode = 0, start = true);
-        wait_for!(DMA2D.cr: !start);
+        self.impls.copy_rect(self.buf.as_mut(), x1, y1, dx, dy, nx, ny);
     }
 
     pub fn scroll_up(&mut self, line_height: u16) {
-        let offset = line_height * self.width;
-        write!(DMA2D.fgmar: ma = self.buf.as_ptr().offset(offset as isize) as u32);
-        write!(DMA2D.fgor: lo = 0);
-        write!(DMA2D.omar: ma = self.buf.as_ptr() as u32);
-        write!(DMA2D.oor: lo = 0);
-        write!(DMA2D.nlr: pl = self.width, nl = self.height);
-        modif!(DMA2D.cr: mode = 0, start = true);
-        wait_for!(DMA2D.cr: !start);
-    }
-
-    pub fn activate(&self) {
-        // Color frame buffer start address
-        write!(LTDC.layer1.cfbar: cfbadd = self.buf.as_ptr() as u32);
-        // reload on next vsync
-        write!(LTDC.srcr: vbr = true);
-        crate::enable_cursor(self.has_cursor);
+        self.impls.copy_rect(self.buf.as_mut(), 0, line_height, 0, 0, self.width, self.height);
     }
 
     pub fn clear_scroll_area(&mut self) {
-        for el in &mut self.buf[(self.width*self.height) as usize..] { *el = 0; }
+        for el in &mut self.buf.as_mut()[(self.width*self.height) as usize..] { *el = 0; }
+    }
+
+    pub fn activate(&mut self) {
+        self.impls.activate(self.buf.as_mut());
     }
 }

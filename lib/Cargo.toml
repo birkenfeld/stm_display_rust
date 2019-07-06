@@ -1,0 +1,11 @@
+[package]
+name = "display"
+version = "0.1.0"
+authors = ["Georg Brandl <g.brandl@fz-juelich.de>"]
+description = "Firmware for MLZ control box display (library)"
+license = "GPL-2.0+"
+edition = "2018"
+
+[dependencies]
+btoi = { version = "0.4.0", default-features = false }
+bresenham = "0.1.1"

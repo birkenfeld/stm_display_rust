@@ -1,12 +1,9 @@
 //! The console display
 
-use crate::stm;
-use hal::serial::Tx;
-use embedded_hal::serial::Write;
 use btoi::btoi;
 
-use crate::framebuf::{CONSOLEFONT, Colors, FrameBuffer};
-use crate::{WIDTH, HEIGHT, CHARW, CHARH, H_WIN_START, V_WIN_START};
+use crate::framebuf::{CONSOLEFONT, Colors, FrameBuffer, FbImpl};
+use crate::{WIDTH, HEIGHT, CHARW, CHARH};
 
 const DEFAULT_COLOR: u8 = 7;
 const DEFAULT_BKGRD: u8 = 0;
@@ -17,38 +14,39 @@ const ROWS: u16 = HEIGHT / CHARH;
 
 const HEX: &[u8] = b"0123456789ABCDEF";
 
-pub struct Console {
-    fb: FrameBuffer,
-    tx: Tx<stm::USART1>,
+pub trait WriteToHost {
+    fn write_byte(&mut self, byte: u8);
+}
+
+pub struct Console<'buf, Tx, Fb> {
+    fb: FrameBuffer<'buf, Fb>,
+    tx: Tx,
     color: Colors,
     cx: u16,
     cy: u16,
+    pos_cursor: fn(u16, u16),
 }
 
-impl Console {
-    pub fn new(mut fb: FrameBuffer, tx: Tx<stm::USART1>) -> Self {
+impl<'buf, Tx: WriteToHost, Fb: FbImpl> Console<'buf, Tx, Fb> {
+    pub fn new(mut fb: FrameBuffer<'buf, Fb>, tx: Tx, pos_cursor: fn(u16, u16)) -> Self {
         fb.clear(0);
         fb.clear_scroll_area();
-        Self { fb, tx, color: [DEFAULT_BKGRD, 0, 0, DEFAULT_COLOR], cx: 0, cy: 0 }
+        Self { fb, tx, color: [DEFAULT_BKGRD, 0, 0, DEFAULT_COLOR], cx: 0, cy: 0,
+               pos_cursor }
     }
 
     pub fn write_to_host(&mut self, bytes: &[u8]) {
         for &byte in bytes {
-            let _ = nb::block!(self.tx.write(byte));
+            self.tx.write_byte(byte);
         }
     }
 
-    pub fn activate(&self) {
-        self.fb.activate();
+    pub fn buf(&self) -> &[u8] {
+        &self.fb.buf()
     }
 
-    fn position_cursor(&self) {
-        write!(LTDC.layer2.whpcr: whstpos = H_WIN_START + self.cx*CHARW + 1,
-               whsppos = H_WIN_START + (self.cx + 1)*CHARW);
-        write!(LTDC.layer2.wvpcr: wvstpos = V_WIN_START + (self.cy + 1)*CHARH,
-               wvsppos = V_WIN_START + (self.cy + 1)*CHARH);
-        // reload on next vsync
-        write!(LTDC.srcr: vbr = true);
+    pub fn activate(&mut self) {
+        self.fb.activate();
     }
 
     pub fn dump_byte(&mut self, byte: u8) {
@@ -98,7 +96,7 @@ impl Console {
                 }
             }
         }
-        self.position_cursor();
+        (self.pos_cursor)(self.cx, self.cy);
     }
 
     pub fn process_escape(&mut self, end: u8, seq: &[u8]) {
@@ -153,7 +151,7 @@ impl Console {
             // otherwise, ignore
             _    => {}
         }
-        self.position_cursor();
+        (self.pos_cursor)(self.cx, self.cy);
     }
 }
 

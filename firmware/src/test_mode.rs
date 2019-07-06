@@ -1,9 +1,9 @@
 //! Implementation of the hardware test mode of the display.
 
 use embedded_hal::digital::v2::OutputPin;
-use crate::recv_uart;
-use crate::{interface::DisplayState, spiflash::SPIFlash, i2ceeprom::I2CEEprom};
-use crate::framebuf::{MEDIUMFONT as FONT, BLACK_ON_WHITE, RED_ON_WHITE, GREEN_ON_WHITE};
+use display::interface::TouchHandler;
+use display::framebuf::{MEDIUMFONT as FONT, BLACK_ON_WHITE, RED_ON_WHITE, GREEN_ON_WHITE};
+use crate::{recv_uart, DisplayState, spiflash::SPIFlash, i2ceeprom::I2CEEprom};
 
 const DATA: &[u8; 16] = b"\xff\xaa\x55\x00Test data\x00\x00\x00";
 

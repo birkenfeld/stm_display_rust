@@ -2,9 +2,9 @@
 
 use cortex_m::asm;
 use embedded_hal::digital::v2::OutputPin;
-use crate::framebuf::{FONTS, MEDIUMFONT as FONT, BLACK_ON_WHITE, RED_ON_WHITE};
-use crate::{interface::DisplayState, console::Console, framebuf::FrameBuffer};
-use crate::{recv_uart, clear_uart};
+use display::interface::TouchHandler;
+use display::framebuf::{FONTS, MEDIUMFONT as FONT, BLACK_ON_WHITE, RED_ON_WHITE};
+use crate::{DisplayState, Console, FrameBuffer, recv_uart, clear_uart};
 
 pub const ACTIVATION: &[u16] = &[1, 1, 2, 2, 0, 3, 0, 3];
 
