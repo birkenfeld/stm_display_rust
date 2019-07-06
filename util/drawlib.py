@@ -20,6 +20,7 @@ CMD_COPYRECT = 0x45
 CMD_PLOT = 0x46
 
 CMD_TOUCH = 0x50
+CMD_TOUCH_MODE = 0x51
 
 CMD_SAVE_ATTRS = 0xa0
 CMD_SAVE_ATTRS_MAX = 0xbf
@@ -67,6 +68,9 @@ class Display:
         rsp = self.port.read(8)
         assert rsp[:4] == b'\x1b\x1b\x05%c' % CMD_VERSION
         return list(rsp[4:])
+
+    def set_touchmode(self, forward):
+        self.send(CMD_TOUCH_MODE, b'\x01' if forward else b'\x00')
 
     def touch_detect(self):
         rsp = self.port.read(6)

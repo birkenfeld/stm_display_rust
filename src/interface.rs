@@ -23,6 +23,7 @@ const CMD_COPYRECT:      u8 = 0x45;
 const CMD_PLOT:          u8 = 0x46;
 
 const CMD_TOUCH:         u8 = 0x50;  // only for replies
+const CMD_TOUCH_MODE:    u8 = 0x51;
 
 const CMD_SAVE_ATTRS:    u8 = 0xa0;
 const CMD_SAVE_ATTRS_MAX:u8 = 0xbf;
@@ -54,7 +55,11 @@ pub struct DisplayState {
     saved: [GraphicsSetting; 32],
     escape: Escape,
     escape_seq: [u8; 256],
-    gfxmode: bool,
+    // if true, graphics display is currently active
+    gfx_mode: bool,
+    // if true, we forward touch events to the host
+    // else, touch switches between graphics and console
+    fwd_touch: bool,
 }
 
 pub enum Action<'a> {
@@ -85,11 +90,12 @@ impl DisplayState {
     pub fn new(mut gfx: FrameBuffer, con: Console) -> Self {
         gfx.clear(255);
         Self { gfx, con, cur: Default::default(), saved: Default::default(),
-               escape: Escape::None, escape_seq: [0; 256], gfxmode: false }
+               escape: Escape::None, escape_seq: [0; 256],
+               gfx_mode: false, fwd_touch: false }
     }
 
     pub fn is_graphics(&self) -> bool {
-        self.gfxmode
+        self.gfx_mode
     }
 
     pub fn console(&mut self) -> &mut Console {
@@ -153,8 +159,17 @@ impl DisplayState {
     }
 
     pub fn process_touch(&mut self, x: u16, y: u16) {
-        let (b0, b1) = pos_to_bytes(x, y);
-        self.con.write_to_host(&[ESCAPE, ESCAPE, 0x03, CMD_TOUCH, b0, b1]);
+        if self.fwd_touch {
+            let (b0, b1) = pos_to_bytes(x, y);
+            self.con.write_to_host(&[ESCAPE, ESCAPE, 0x03, CMD_TOUCH, b0, b1]);
+        } else {
+            self.gfx_mode = !self.gfx_mode;
+            if self.gfx_mode {
+                self.gfx.activate();
+            } else {
+                self.con.activate();
+            }
+        }
     }
 
     pub fn process_command(&mut self, len: usize) -> Action {
@@ -162,11 +177,11 @@ impl DisplayState {
         let data_len = cmd.len() - 2;
         match cmd[1] {
             CMD_MODE_GRAPHICS => {
-                self.gfxmode = true;
+                self.gfx_mode = true;
                 self.gfx.activate();
             },
             CMD_MODE_CONSOLE  => {
-                self.gfxmode = false;
+                self.gfx_mode = false;
                 self.con.activate();
             },
             CMD_SET_POS => if data_len >= 2 {
@@ -251,6 +266,9 @@ impl DisplayState {
             },
             CMD_SET_STARTUP => {
                 return Action::WriteEeprom(0, 64, &cmd[2..]);
+            }
+            CMD_TOUCH_MODE => if data_len >= 1 {
+                self.fwd_touch = cmd[2] > 0;
             }
             CMD_IDENT => {
                 self.con.write_to_host(&[0x1b, 0x1b, 0x05, 0xf3]);
