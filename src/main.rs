@@ -341,8 +341,7 @@ fn main() -> ! {
     // Normal main loop: process input from UART
     loop {
         if let Some(ev) = TOUCH_EVT.dequeue() {
-            let (x, y) = convert_touch(ev);
-            disp.process_touch(x, y);
+            let (x, _) = disp.process_touch(ev);
             touch_ring.push(x / 120);
             if touch_ring.iter().eq(konami_mode::ACTIVATION) {
                 konami_mode::run(&mut disp, &mut reset_pin);
@@ -358,20 +357,6 @@ fn main() -> ! {
                 }
             }
         }
-    }
-}
-
-fn convert_touch(ev: u16) -> (u16, u16) {
-    let x = (ev / 6) - 150;
-    (x, 0)
-}
-
-fn wait_touch() -> (u16, u16) {
-    loop {
-        if let Some(ev) = TOUCH_EVT.dequeue() {
-            return convert_touch(ev);
-        }
-        asm::wfi();
     }
 }
 

@@ -2,7 +2,7 @@
 
 use cortex_m::asm;
 use embedded_hal::digital::v2::OutputPin;
-use crate::{wait_touch, recv_uart, clear_uart, interface, console, framebuf};
+use crate::{recv_uart, clear_uart, interface, console, framebuf};
 use crate::framebuf::{MEDIUMFONT as FONT, BLACK_ON_WHITE, RED_ON_WHITE};
 
 pub const ACTIVATION: &[u16] = &[1, 1, 2, 2, 0, 3, 0, 3];
@@ -12,7 +12,7 @@ const PXE_SCRIPT: &[u8] = b"http://ictrlfs.ictrl.frm2/public/echo.pxe";
 
 pub fn run<P: OutputPin>(disp: &mut interface::DisplayState, reset_pin: &mut P) {
     let mut was_gfx = disp.is_graphics();
-    let (gfx, con) = disp.split();
+    let (gfx, con, touch) = disp.split();
 
     gfx.activate();
     gfx.clear(15);
@@ -26,7 +26,7 @@ pub fn run<P: OutputPin>(disp: &mut interface::DisplayState, reset_pin: &mut P) 
     gfx.rect_outline(364, 8, 472, 120, 0);
     gfx.text(FONT, 380, 56, b"Cancel", BLACK_ON_WHITE);
 
-    let x = wait_touch().0;
+    let x = touch.wait().0;
     // discard anything the APU sent while the menu was displayed
     clear_uart();
 

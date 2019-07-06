@@ -21,6 +21,7 @@ CMD_PLOT = 0x46
 
 CMD_TOUCH = 0x50
 CMD_TOUCH_MODE = 0x51
+CMD_TOUCH_CALIB = 0x52
 
 CMD_SAVE_ATTRS = 0xa0
 CMD_SAVE_ATTRS_MAX = 0xbf
@@ -69,8 +70,11 @@ class Display:
         assert rsp[:4] == b'\x1b\x1b\x05%c' % CMD_VERSION
         return list(rsp[4:])
 
-    def set_touchmode(self, forward):
+    def set_touch_mode(self, forward):
         self.send(CMD_TOUCH_MODE, b'\x01' if forward else b'\x00')
+
+    def set_touch_calib(self, xd, xo, yd=1, yo=0):
+        self.send(CMD_TOUCH_CALIB, bytes([xd, xo, yd, yo]))
 
     def touch_detect(self):
         rsp = self.port.read(6)

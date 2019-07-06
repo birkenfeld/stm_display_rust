@@ -1,7 +1,7 @@
 //! Implementation of the hardware test mode of the display.
 
 use embedded_hal::digital::v2::OutputPin;
-use crate::{wait_touch, recv_uart, interface, spiflash, i2ceeprom};
+use crate::{recv_uart, interface, spiflash, i2ceeprom};
 use crate::framebuf::{MEDIUMFONT as FONT, BLACK_ON_WHITE, RED_ON_WHITE, GREEN_ON_WHITE};
 
 const DATA: &[u8; 16] = b"\xff\xaa\x55\x00Test data\x00\x00\x00";
@@ -14,7 +14,7 @@ const P_X2: u16 = P_X + 88;
 pub fn run<T1, T2: OutputPin>(disp: &mut interface::DisplayState,
                               spi_flash: &mut spiflash::SPIFlash<T1, T2>,
                               eeprom: &mut i2ceeprom::I2CEEprom) {
-    let (gfx, con) = disp.split();
+    let (gfx, con, touch) = disp.split();
 
     // #1. Display
     gfx.clear(15);
@@ -23,16 +23,16 @@ pub fn run<T1, T2: OutputPin>(disp: &mut interface::DisplayState,
     gfx.text(FONT, 176, 0, b"Self test active", BLACK_ON_WHITE);
     gfx.text(FONT, 16, 32, b"Touch anywhere to cycle through colors.", BLACK_ON_WHITE);
     gfx.text(FONT, 16, 48, b"Make sure no pixel errors are present.", BLACK_ON_WHITE);
-    wait_touch();
+    touch.wait();
 
     gfx.clear(9);
-    wait_touch();
+    touch.wait();
     gfx.clear(10);
-    wait_touch();
+    touch.wait();
     gfx.clear(12);
-    wait_touch();
+    touch.wait();
     gfx.clear(15);
-    wait_touch();
+    touch.wait();
 
     // #2. Flash memory
     gfx.clear(15);
@@ -87,15 +87,15 @@ pub fn run<T1, T2: OutputPin>(disp: &mut interface::DisplayState,
     gfx.text(FONT, P_X, P_Y+48, b"Touch.....", BLACK_ON_WHITE);
     gfx.rect_outline(8, 20, 120, 120, 0);
     gfx.text(FONT, 20, 56, b"Touch here", BLACK_ON_WHITE);
-    while wait_touch().0 > 120 {}
+    while touch.wait().0 > 120 {}
     gfx.rect(8, 20, 121, 121, 15);
 
     gfx.rect_outline(352, 20, 472, 120, 0);
     gfx.text(FONT, 364, 56, b"Touch here", BLACK_ON_WHITE);
-    while wait_touch().0 < 364 {}
+    while touch.wait().0 < 364 {}
     gfx.rect(352, 20, 473, 121, 15);
     gfx.text(FONT, P_X2, P_Y+48, b"OK", GREEN_ON_WHITE);
 
     gfx.text(FONT, 16, 96, b"Touch anywhere to exit self test mode.", BLACK_ON_WHITE);
-    wait_touch();
+    touch.wait();
 }
