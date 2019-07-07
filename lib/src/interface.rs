@@ -91,8 +91,7 @@ fn pos_from_bytes(pos: &[u8]) -> (u16, u16) {
 }
 
 fn pos_to_bytes(x: u16, y: u16) -> (u8, u8) {
-    (((y & 0x7F) | (x & 0x80)) as u8,
-     (x & 0xFF) as u8)
+    ((y << 1) as u8 | (x >> 8) as u8, x as u8)
 }
 
 impl<'buf, Tx: WriteToHost, Th: TouchHandler, Fb: FbImpl> DisplayState<'buf, Tx, Th, Fb> {
