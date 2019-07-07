@@ -97,8 +97,11 @@ fn pos_to_bytes(x: u16, y: u16) -> (u8, u8) {
 impl<'buf, Tx: WriteToHost, Th: TouchHandler, Fb: FbImpl> DisplayState<'buf, Tx, Th, Fb> {
     pub fn new(mut gfx: FrameBuffer<'buf, Fb>, con: Console<'buf, Tx, Fb>, touch: Th) -> Self {
         gfx.clear(255);
+        let default_setting = GraphicsSetting {
+            clip2: (gfx.width(), gfx.height()), .. Default::default()
+        };
         Self {
-            gfx, con, cur: Default::default(), saved: Default::default(),
+            gfx, con, cur: default_setting, saved: Default::default(),
             escape: Escape::None, escape_seq: [0; 256],
             gfx_mode: false, fwd_touch: false,
             touch,
