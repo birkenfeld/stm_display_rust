@@ -155,22 +155,22 @@ impl Console {
         }
         self.position_cursor();
     }
+}
 
-    pub fn get_lut_colors() -> impl Iterator<Item=(u8, u8, u8)> {
-        let basic_16 = (0..16).map(|v| {
-            let b = (v & 4 != 0) as u8;
-            let g = (v & 2 != 0) as u8;
-            let r = (v & 1 != 0) as u8;
-            let i = (v & 8 != 0) as u8;
-            (0x55*(r<<1 | i), 0x55*(g<<1 | i), 0x55*(b<<1 | i))
-        });
-        let colorcube = (0..6).flat_map(move |r| {
-            (0..6).flat_map(move |g| {
-                (0..6).map(move |b| (0x33*r, 0x33*g, 0x33*b))
-            })
-        });
-        let grayscale = (0..24).map(|g| (8+10*g, 8+10*g, 8+10*g));
+pub fn get_lut_colors() -> impl Iterator<Item=(u8, u8, u8)> {
+    let basic_16 = (0..16).map(|v| {
+        let b = (v & 4 != 0) as u8;
+        let g = (v & 2 != 0) as u8;
+        let r = (v & 1 != 0) as u8;
+        let i = (v & 8 != 0) as u8;
+        (0x55*(r<<1 | i), 0x55*(g<<1 | i), 0x55*(b<<1 | i))
+    });
+    let colorcube = (0..6).flat_map(move |r| {
+        (0..6).flat_map(move |g| {
+            (0..6).map(move |b| (0x33*r, 0x33*g, 0x33*b))
+        })
+    });
+    let grayscale = (0..24).map(|g| (8+10*g, 8+10*g, 8+10*g));
 
-        basic_16.chain(colorcube).chain(grayscale)
-    }
+    basic_16.chain(colorcube).chain(grayscale)
 }

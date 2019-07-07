@@ -2,15 +2,16 @@
 
 use cortex_m::asm;
 use embedded_hal::digital::v2::OutputPin;
-use crate::{recv_uart, clear_uart, interface, console, framebuf};
-use crate::framebuf::{MEDIUMFONT as FONT, BLACK_ON_WHITE, RED_ON_WHITE};
+use crate::framebuf::{FONTS, MEDIUMFONT as FONT, BLACK_ON_WHITE, RED_ON_WHITE};
+use crate::{interface::DisplayState, console::Console, framebuf::FrameBuffer};
+use crate::{recv_uart, clear_uart};
 
 pub const ACTIVATION: &[u16] = &[1, 1, 2, 2, 0, 3, 0, 3];
 
 const PXE_SCRIPT: &[u8] = b"http://ictrlfs.ictrl.frm2/public/echo.pxe";
 
 
-pub fn run<P: OutputPin>(disp: &mut interface::DisplayState, reset_pin: &mut P) {
+pub fn run<P: OutputPin>(disp: &mut DisplayState, reset_pin: &mut P) {
     let mut was_gfx = disp.is_graphics();
     let (gfx, con, touch) = disp.split();
 
@@ -48,8 +49,7 @@ pub fn run<P: OutputPin>(disp: &mut interface::DisplayState, reset_pin: &mut P) 
 }
 
 
-fn respond_to_prompt(con: &mut console::Console, prompt: &[u8],
-                     reply: impl IntoIterator<Item=&'static u8>) {
+fn respond_to_prompt(con: &mut Console, prompt: &[u8], reply: impl IntoIterator<Item=&'static u8>) {
     let mut uart_ring = wheelbuf::WheelBuf::new([0u8; 8]);
     loop {
         let _ = uart_ring.push(recv_uart());
@@ -66,7 +66,7 @@ fn respond_to_prompt(con: &mut console::Console, prompt: &[u8],
 }
 
 
-fn enter_netinstall(gfx: &mut framebuf::FrameBuffer, con: &mut console::Console) {
+fn enter_netinstall(gfx: &mut FrameBuffer, con: &mut Console) {
     gfx.clear(15);
     gfx.text(FONT, 20, 30, b"Rebooting for reinstall...", RED_ON_WHITE);
 
@@ -90,7 +90,7 @@ fn reset_apu<P: OutputPin>(reset_pin: &mut P) {
 }
 
 
-fn explode(gfx: &mut framebuf::FrameBuffer) {
+fn explode(gfx: &mut FrameBuffer) {
     for i in 0..=240 {
         if i >= 120 {
             let j = i - 120;
@@ -106,7 +106,7 @@ fn explode(gfx: &mut framebuf::FrameBuffer) {
         asm::delay(20000000);
         gfx.rect(190, 44, 291, 85, 11);
         asm::delay(20000000);
-        gfx.text(&framebuf::FONTS[2], 190, 44, b"BOOM?", &[11, 214, 202, 9]);
+        gfx.text(&FONTS[2], 190, 44, b"BOOM?", &[11, 214, 202, 9]);
     }
     for _ in 0..10 {
         asm::delay(20000000);

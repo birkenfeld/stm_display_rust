@@ -1,7 +1,8 @@
 //! Implementation of the hardware test mode of the display.
 
 use embedded_hal::digital::v2::OutputPin;
-use crate::{recv_uart, interface, spiflash, i2ceeprom};
+use crate::recv_uart;
+use crate::{interface::DisplayState, spiflash::SPIFlash, i2ceeprom::I2CEEprom};
 use crate::framebuf::{MEDIUMFONT as FONT, BLACK_ON_WHITE, RED_ON_WHITE, GREEN_ON_WHITE};
 
 const DATA: &[u8; 16] = b"\xff\xaa\x55\x00Test data\x00\x00\x00";
@@ -11,9 +12,8 @@ const P_Y: u16 = 24;
 const P_X2: u16 = P_X + 88;
 
 
-pub fn run<T1, T2: OutputPin>(disp: &mut interface::DisplayState,
-                              spi_flash: &mut spiflash::SPIFlash<T1, T2>,
-                              eeprom: &mut i2ceeprom::I2CEEprom) {
+pub fn run<T1, T2: OutputPin>(disp: &mut DisplayState, spi_flash: &mut SPIFlash<T1, T2>,
+                              eeprom: &mut I2CEEprom) {
     let (gfx, con, touch) = disp.split();
 
     // #1. Display

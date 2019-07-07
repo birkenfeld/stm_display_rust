@@ -27,7 +27,6 @@ mod console;
 mod test_mode;
 mod konami_mode;
 
-use crate::console::Console;
 use crate::framebuf::FrameBuffer;
 use crate::interface::Action;
 
@@ -257,7 +256,7 @@ fn main() -> ! {
     // Frame buffer number of lines
     write!(LTDC.layer1.cfblnr: cfblnbr = HEIGHT);
     // Set up 256-color LUT
-    for (i, (r, g, b)) in Console::get_lut_colors().enumerate() {
+    for (i, (r, g, b)) in console::get_lut_colors().enumerate() {
         write!(LTDC.layer1.clutwr: clutadd = i as u8, red = r, green = g, blue = b);
     }
 
