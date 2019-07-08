@@ -137,6 +137,15 @@ fn main() {
             disp.process_byte(ch);
             need_update = true;
         }
+        // process "touch" input by mouse
+        let mouse_is_down = win.get_mouse_down(minifb::MouseButton::Left);
+        if mouse_is_down && !mouse_was_down {
+            if let Some((x, y)) = win.get_mouse_pos(minifb::MouseMode::Discard) {
+                disp.process_touch((x as u16, y as u16));
+                need_update = true;
+            }
+        }
+        mouse_was_down = mouse_is_down;
         // update the framebuffer if something might have changed
         if need_update {
             // check which framebuffer to display, and prepare the 32-bit buffer
@@ -148,14 +157,6 @@ fn main() {
         } else {
             win.update();
         }
-        // process "touch" input by mouse
-        let mouse_is_down = win.get_mouse_down(minifb::MouseButton::Left);
-        if mouse_is_down && !mouse_was_down {
-            if let Some((x, y)) = win.get_mouse_pos(minifb::MouseMode::Discard) {
-                disp.process_touch((x as u16, y as u16));
-            }
-        }
-        mouse_was_down = mouse_is_down;
         // process quit conditions
         if !win.is_open() {
             println!("Window closed, exiting");
