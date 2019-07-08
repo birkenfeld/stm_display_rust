@@ -131,24 +131,23 @@ fn main() {
     let mut mouse_was_down = false;
 
     loop {
-        // process quit conditions
-        if !win.is_open() {
-            println!("Window closed, exiting");
-            return;
-        }
-        if win.is_key_down(minifb::Key::Escape) {
-            return;
-        }
         // process input from remote tty
+        let mut need_update = false;
         while let Ok(ch) = rx.try_recv() {
             disp.process_byte(ch);
+            need_update = true;
         }
-        // check which framebuffer to display, and prepare the 32-bit buffer
-        let fb = if console_active.get() { disp.console().buf() } else { disp.graphics().buf() };
-        for (out, &color) in fb_32bit.iter_mut().zip(fb) {
-            *out = lut[color as usize];
+        // update the framebuffer if something might have changed
+        if need_update {
+            // check which framebuffer to display, and prepare the 32-bit buffer
+            let fb = if console_active.get() { disp.console().buf() } else { disp.graphics().buf() };
+            for (out, &color) in fb_32bit.iter_mut().zip(fb) {
+                *out = lut[color as usize];
+            }
+            win.update_with_buffer(&fb_32bit).expect("could not update window");
+        } else {
+            win.update();
         }
-        win.update_with_buffer(&fb_32bit).expect("could not update window");
         // process "touch" input by mouse
         let mouse_is_down = win.get_mouse_down(minifb::MouseButton::Left);
         if mouse_is_down && !mouse_was_down {
@@ -157,6 +156,14 @@ fn main() {
             }
         }
         mouse_was_down = mouse_is_down;
+        // process quit conditions
+        if !win.is_open() {
+            println!("Window closed, exiting");
+            return;
+        }
+        if win.is_key_down(minifb::Key::Escape) {
+            return;
+        }
         // aim for a framerate of 50Hz
         std::thread::sleep(std::time::Duration::from_millis(20));
     }
