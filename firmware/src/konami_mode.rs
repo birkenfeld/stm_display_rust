@@ -72,8 +72,10 @@ fn enter_netinstall(gfx: &mut FrameBuffer, con: &mut Console) {
 
     respond_to_prompt(con, b"PXE boot", b"N");
     gfx.text(FONT, 20, 80, b"PXE", BLACK_ON_WHITE);
-    respond_to_prompt(con, b"autoboot", b"\x1b[A\ndhcp\n");
+    respond_to_prompt(con, b"autoboot", b"\x1b[A\n");
+    respond_to_prompt(con, b"2JiPXE> ", b"ifconf -c dhcp net0\n");
     gfx.text(FONT, 20 + 4*8, 80, b"DHCP", BLACK_ON_WHITE);
+    // TODO: respond to "No configuration methods succeeded" with dhcp again
     respond_to_prompt(con, b"..... ok", b"imgexec ".iter().chain(PXE_SCRIPT).chain(b"\n"));
     gfx.text(FONT, 20 + 9*8, 80, b"IMG", BLACK_ON_WHITE);
 
