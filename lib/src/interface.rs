@@ -39,6 +39,8 @@ const CMD_IDENT:         u8 = 0xf3;
 
 const RESET_MAGIC:    &[u8] = &[0xcb, 0xef, 0x20, 0x18];
 
+const BOOT_STRING:    &[u8] = b"SeaBIOS (version";
+
 #[derive(Default, Clone, Copy)]
 pub struct GraphicsSetting {
     pub posx:  u16,
@@ -83,6 +85,7 @@ enum Escape {
     SawOne,
     Console(usize),
     Graphics(usize, usize),
+    MayBeBooting(usize),
 }
 
 fn pos_from_bytes(pos: &[u8]) -> (u16, u16) {
@@ -151,7 +154,12 @@ impl<'buf, Tx: WriteToHost, Th: TouchHandler, Fb: FbImpl> DisplayState<'buf, Tx,
                     }
                 } else {
                     self.con.process_escape(ch, &self.escape_seq[..*pos]);
-                    self.escape = Escape::None;
+                    if ch == b'J' {
+                        // Check if we're getting SeaBIOS...
+                        self.escape = Escape::MayBeBooting(0);
+                    } else {
+                        self.escape = Escape::None;
+                    }
                 }
             }
             Escape::Graphics(ref mut pos, ref mut len) => {
@@ -170,6 +178,17 @@ impl<'buf, Tx: WriteToHost, Th: TouchHandler, Fb: FbImpl> DisplayState<'buf, Tx,
                     let escape_len = *pos;
                     self.escape = Escape::None;
                     return self.process_command(escape_len);
+                }
+            }
+            Escape::MayBeBooting(ref mut pos) => {
+                *pos += 1;
+                if ch != BOOT_STRING[*pos - 1] {
+                    self.escape = Escape::None;
+                    return self.process_byte(ch);
+                } else if *pos == BOOT_STRING.len() {
+                    // We are booting! Reset the display.
+                    self.escape = Escape::None;
+                    return Action::Reset;
                 }
             }
         }

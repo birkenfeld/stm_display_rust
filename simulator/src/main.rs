@@ -122,7 +122,9 @@ fn main() {
         // process input from remote tty
         let mut need_update = false;
         while let Ok(ch) = rx.try_recv() {
-            disp.process_byte(ch);
+            if let display::interface::Action::Reset = disp.process_byte(ch) {
+                println!("Would reset the display!");
+            }
             need_update = true;
         }
         // process "touch" input by mouse
