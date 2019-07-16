@@ -7,7 +7,9 @@ use stm32f4::stm32f429 as stm;
 use stm::interrupt;
 use cortex_m::{asm, interrupt as interrupts};
 use cortex_m_rt::ExceptionFrame;
-use heapless::mpmc::{Q16, Q64};
+// TODO: make sure queues are not mutably aliased
+use heapless::spsc::{SingleCore, Queue};
+use heapless::consts::*;
 use hal::time::*;
 use hal::timer::{Timer, Event};
 use hal::serial::{Serial, config::Config as SerialConfig};
@@ -66,10 +68,10 @@ static CURSORBUF: [u8; CHARW as usize] = [CURSOR_COLOR; CHARW as usize];
 static CURSOR_ENABLED: AtomicBool = AtomicBool::new(false);
 
 // UART receive buffer
-static UART_RX: Q64<u8> = Q64::new();
+static mut UART_RX: Queue<u8, U1024, u16, SingleCore> = unsafe { Queue(heapless::i::Queue::u16_sc()) };
 
 // Touch event buffer
-static TOUCH_EVT: Q16<u16> = Q16::new();
+static mut TOUCH_EVT: Queue<u16, U16, u8, SingleCore> = unsafe { Queue(heapless::i::Queue::u8_sc()) };
 
 #[cortex_m_rt::entry]
 fn main() -> ! {
@@ -304,6 +306,9 @@ fn main() -> ! {
     modif!(USART1.cr1: rxneie = true);
     nvic.enable(stm::Interrupt::USART1);
 
+    let mut uart = unsafe { UART_RX.split().1 };
+    let mut touch = unsafe { TOUCH_EVT.split().1 };
+
     if testmode_pin.is_high().unwrap() {
         test_mode::run(&mut disp, &mut spi_flash, &mut eeprom);
     }
@@ -315,8 +320,7 @@ fn main() -> ! {
     let mut startup_buf = [0; 256];
     if let Ok(code) = eeprom.read_stored_entry(0, 64, &mut startup_buf) {
         for &byte in code {
-            // TODO: might not fit into 64 bytes!
-            let _ = UART_RX.enqueue(byte);
+            unsafe { UART_RX.enqueue_unchecked(byte); }
         }
     }
 
@@ -334,14 +338,14 @@ fn main() -> ! {
 
     // Normal main loop: process input from UART
     loop {
-        if let Some(ev) = TOUCH_EVT.dequeue() {
+        if let Some(ev) = touch.dequeue() {
             let (x, _) = disp.process_touch(ev);
             touch_ring.push(x / 120);
             if touch_ring.iter().eq(konami_mode::ACTIVATION) {
                 konami_mode::run(&mut disp, &mut reset_pin);
             }
         }
-        if let Some(ch) = UART_RX.dequeue() {
+        if let Some(ch) = uart.dequeue() {
             match disp.process_byte(ch) {
                 Action::None => (),
                 Action::Reset => reset(pcore.SCB),
@@ -355,8 +359,9 @@ fn main() -> ! {
 }
 
 fn recv_uart() -> u8 {
+    let mut uart = unsafe { UART_RX.split().1 };
     loop {
-        if let Some(ch) = UART_RX.dequeue() {
+        if let Some(ch) = uart.dequeue() {
             return ch;
         }
         asm::wfi();
@@ -364,7 +369,8 @@ fn recv_uart() -> u8 {
 }
 
 fn clear_uart() {
-    while UART_RX.dequeue().is_some() {}
+    let mut uart = unsafe { UART_RX.split().1 };
+    while uart.dequeue().is_some() {}
 }
 
 pub fn enable_cursor(en: bool) {
@@ -395,7 +401,7 @@ fn TIM3() {
 #[stm::interrupt]
 fn USART1() {
     let data = read!(USART1.dr: dr) as u8;
-    let _ = UART_RX.enqueue(data);
+    unsafe { let _ = UART_RX.split().0.enqueue(data); }
 }
 
 const THRESHOLD: u16 = 500;
@@ -416,7 +422,7 @@ fn TIM4() {
     let mini = STATE.data.iter().cloned().min().unwrap();
     if !STATE.last && mini > THRESHOLD {
         let mean = STATE.data.iter().map(|&v| v as u32).sum::<u32>() / NSAMPLES as u32;
-        let _ = TOUCH_EVT.enqueue(mean as u16);
+        unsafe { let _ = TOUCH_EVT.split().0.enqueue(mean as u16); }
         STATE.last = true;
     } else if STATE.last && mini < THRESHOLD {
         STATE.last = false;
@@ -482,8 +488,9 @@ impl display::interface::TouchHandler for TouchHandler {
     type Event = u16;
 
     fn wait(&self) -> (u16, u16) {
+        let mut touch = unsafe { TOUCH_EVT.split().1 };
         loop {
-            if let Some(ev) = TOUCH_EVT.dequeue() {
+            if let Some(ev) = touch.dequeue() {
                 return self.convert(ev);
             }
             asm::wfi();
