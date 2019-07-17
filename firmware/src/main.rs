@@ -302,7 +302,8 @@ fn main() -> ! {
         TouchHandler { calib: (6, 150, 1, 0) }
     );
 
-    // Activate USART receiver
+    // Activate USART receiver, make sure the receive event flag is clear
+    modif!(USART1.sr: rxne = false);
     modif!(USART1.cr1: rxneie = true);
     nvic.enable(stm::Interrupt::USART1);
 
@@ -442,30 +443,19 @@ fn DefaultHandler(irqn: i16) {
     panic!("Unhandled exception (IRQn = {})", irqn);
 }
 
-const SCB_AIRCR_RESET: u32 = 0x05FA_0004;
-
-pub fn reset(scb: stm::SCB) -> ! {
-    unsafe {
-        interrupts::disable();
-        asm::dsb();
-        // Do a soft-reset of the cpu
-        scb.aircr.write(SCB_AIRCR_RESET);
-        asm::dsb();
-        unreachable!()
-    }
+/// Do a soft-reset of the CPU
+pub fn reset(mut scb: stm::SCB) -> ! {
+    interrupts::disable();
+    scb.system_reset();
 }
 
-pub fn reset_to_bootloader<O: OutputPin>(scb: stm::SCB, mut pin: O) -> ! {
-    unsafe {
-        interrupts::disable();
-        // Set Boot0 high (keeps high through reset via RC circuit)
-        let _ = pin.set_high();
-        asm::delay(10000);
-        asm::dsb();
-        scb.aircr.write(SCB_AIRCR_RESET);
-        asm::dsb();
-        unreachable!()
-    }
+/// Do a soft-reset of the CPU and set BOOT0 to jump into bootloader
+pub fn reset_to_bootloader<O: OutputPin>(mut scb: stm::SCB, mut pin: O) -> ! {
+    interrupts::disable();
+    // Set Boot0 high (keeps high through reset via RC circuit)
+    let _ = pin.set_high();
+    asm::delay(10000);
+    scb.system_reset();
 }
 
 // Implement the various target specific traits for the STM.

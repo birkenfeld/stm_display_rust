@@ -19,4 +19,4 @@ pub const CHARH: u16 = framebuf::CONSOLEFONT.size().1;
 ///
 /// - 0.0.1.0 initial version
 /// - 0.0.1.1 after update to generic code with simulator
-const IDENT: [u8; 4] = [0x00, 0x00, 0x01, 0x01];
+const IDENT: [u8; 4] = [0x00, 0x00, 0x01, 0x02];

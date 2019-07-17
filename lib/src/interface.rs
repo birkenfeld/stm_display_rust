@@ -39,7 +39,7 @@ const CMD_IDENT:         u8 = 0xf3;
 
 const RESET_MAGIC:    &[u8] = &[0xcb, 0xef, 0x20, 0x18];
 
-const BOOT_STRING:    &[u8] = b"SeaBIOS (version";
+const BOOT_STRING:    &[u8] = b"\x1b[0mSeaBIOS ";
 
 #[derive(Default, Clone, Copy)]
 pub struct GraphicsSetting {
