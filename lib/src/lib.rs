@@ -15,8 +15,10 @@ pub const CHARH: u16 = framebuf::CONSOLEFONT.size().1;
 
 /// Reply to host's identify query.
 ///
-/// Meanings:
+/// Changes between versions:
 ///
 /// - 0.0.1.0 initial version
 /// - 0.0.1.1 after update to generic code with simulator
-const IDENT: [u8; 4] = [0x00, 0x00, 0x01, 0x02];
+/// - 0.0.1.2 after fix to reset command
+/// - 0.0.1.3 after change of line/rect coordinate args
+const IDENT: [u8; 4] = [0x00, 0x00, 0x01, 0x03];

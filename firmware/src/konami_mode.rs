@@ -96,17 +96,17 @@ fn explode(gfx: &mut FrameBuffer) {
     for i in 0..=240 {
         if i >= 120 {
             let j = i - 120;
-            gfx.rect(240 - j, 64 - j.min(64), 240 + j + 1, 64 + j.min(64), 11);
-            gfx.rect(240 - i, 0, 240 - j, 128, 1);
-            gfx.rect(240 + j + 1, 0, 240 + i + 1, 128, 1);
+            gfx.rect(240 - j, 64 - j.min(64), 240 + j, 63 + j.min(64), 11);
+            gfx.rect(240 - i, 0, 239 - j, 127, 1);
+            gfx.rect(240 + j + 1, 0, 240 + i, 127, 1);
         } else {
-            gfx.rect(240 - i, 64 - i.min(64), 240 + i + 1, 64 + i.min(64), 1);
+            gfx.rect(240 - i, 64 - i.min(64), 240 + i, 63 + i.min(64), 1);
         }
         asm::delay(1000000);
     }
     for _ in 0..5 {
         asm::delay(20000000);
-        gfx.rect(190, 44, 291, 85, 11);
+        gfx.rect(190, 44, 290, 84, 11);
         asm::delay(20000000);
         gfx.text(&FONTS[2], 190, 44, b"BOOM?", &[11, 214, 202, 9]);
     }

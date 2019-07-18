@@ -331,7 +331,7 @@ fn main() -> ! {
     gfx.clear(15);
     loop {
         let (x, _) = wait_touch();
-        gfx.rect(x - 1, 0, x + 2, 128, 4);
+        gfx.rect(x - 1, 0, x + 1, 127, 4);
     }
     */
 

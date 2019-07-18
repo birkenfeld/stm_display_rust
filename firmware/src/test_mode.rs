@@ -88,12 +88,12 @@ pub fn run<T1, T2: OutputPin>(disp: &mut DisplayState, spi_flash: &mut SPIFlash<
     gfx.rect_outline(8, 20, 120, 120, 0);
     gfx.text(FONT, 20, 56, b"Touch here", BLACK_ON_WHITE);
     while touch.wait().0 > 120 {}
-    gfx.rect(8, 20, 121, 121, 15);
+    gfx.rect(8, 20, 120, 120, 15);
 
     gfx.rect_outline(352, 20, 472, 120, 0);
     gfx.text(FONT, 364, 56, b"Touch here", BLACK_ON_WHITE);
     while touch.wait().0 < 364 {}
-    gfx.rect(352, 20, 473, 121, 15);
+    gfx.rect(352, 20, 472, 120, 15);
     gfx.text(FONT, P_X2, P_Y+48, b"OK", GREEN_ON_WHITE);
 
     gfx.text(FONT, 16, 96, b"Touch anywhere to exit self test mode.", BLACK_ON_WHITE);

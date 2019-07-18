@@ -101,7 +101,7 @@ impl<'buf, Tx: WriteToHost, Th: TouchHandler, Fb: FbImpl> DisplayState<'buf, Tx,
     pub fn new(mut gfx: FrameBuffer<'buf, Fb>, con: Console<'buf, Tx, Fb>, touch: Th) -> Self {
         gfx.clear(255);
         let default_setting = GraphicsSetting {
-            clip2: (gfx.width(), gfx.height()), .. Default::default()
+            clip2: (gfx.width() - 1, gfx.height() - 1), .. Default::default()
         };
         Self {
             gfx, con, cur: default_setting, saved: Default::default(),
@@ -242,7 +242,7 @@ impl<'buf, Tx: WriteToHost, Th: TouchHandler, Fb: FbImpl> DisplayState<'buf, Tx,
                     self.cur.clip2 = pos_from_bytes(&cmd[4..]);
                 } else {
                     self.cur.clip1 = (0, 0);
-                    self.cur.clip2 = (self.gfx.width(), self.gfx.height());
+                    self.cur.clip2 = (self.gfx.width() - 1, self.gfx.height() - 1);
                 }
                 self.gfx.set_clip(self.cur.clip1, self.cur.clip2);
             }

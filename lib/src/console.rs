@@ -30,7 +30,7 @@ pub struct Console<'buf, Tx, Fb> {
 impl<'buf, Tx: WriteToHost, Fb: FbImpl> Console<'buf, Tx, Fb> {
     pub fn new(mut fb: FrameBuffer<'buf, Fb>, tx: Tx, pos_cursor: fn(u16, u16)) -> Self {
         fb.clear(0);
-        fb.clear_scroll_area();
+        fb.clear_scroll_area(0);
         Self { fb, tx, color: [DEFAULT_BKGRD, 0, 0, DEFAULT_COLOR], cx: 0, cy: 0,
                pos_cursor }
     }

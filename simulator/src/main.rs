@@ -59,7 +59,6 @@ struct FbImpl<'a> {
 }
 
 impl display::framebuf::FbImpl for FbImpl<'_> {
-    // TODO: move to default impl
     fn fill_rect(&mut self, buf: &mut [u8], x1: u16, y1: u16, x2: u16, y2: u16, color: u8) {
         for y in y1..y2 {
             for x in x1..x2 {
@@ -69,11 +68,11 @@ impl display::framebuf::FbImpl for FbImpl<'_> {
     }
 
     fn copy_rect(&mut self, buf: &mut [u8], x1: u16, y1: u16, x2: u16, y2: u16, nx: u16, ny: u16) {
-        // TODO handle cases other than shifting to the top left
+        let old = buf.to_vec();
         for iy in 0..ny {
             for ix in 0..nx {
                 buf[(x2 + ix + (y2 + iy) * display::WIDTH) as usize] =
-                    buf[(x1 + ix + (y1 + iy) * display::WIDTH) as usize];
+                    old[(x1 + ix + (y1 + iy) * display::WIDTH) as usize];
             }
         }
     }

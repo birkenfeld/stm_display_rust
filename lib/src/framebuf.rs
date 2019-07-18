@@ -41,8 +41,11 @@ pub const CONSOLEFONT: &Font = &FONTS[0];
 pub const MEDIUMFONT: &Font = &FONTS[1];
 
 pub trait FbImpl {
+    /// Fill rectangle from (x1, y1) up, but *excluding*, (x2, y2).
     fn fill_rect(&mut self, buf: &mut [u8], x1: u16, y1: u16, x2: u16, y2: u16, color: u8);
+    /// Copy rectangle from (x1, y1) to (x2, y2) with a size of (nx, ny) pixels.
     fn copy_rect(&mut self, buf: &mut [u8], x1: u16, y1: u16, x2: u16, y2: u16, nx: u16, ny: u16);
+    /// Activate this framebuffer.
     fn activate(&self, buf: &mut [u8]);
 }
 
@@ -50,14 +53,16 @@ pub struct FrameBuffer<'buf, Fb> {
     buf: &'buf mut [u8],
     width: u16,
     height: u16,
+    // Top-left pixel in clip rectangle
     clip1: (u16, u16),
+    // Bottom-right pixel in clip rectangle (inclusive)
     clip2: (u16, u16),
     impls: Fb,
 }
 
 impl<'buf, Fb: FbImpl> FrameBuffer<'buf, Fb> {
     pub fn new(buf: &'buf mut [u8], width: u16, height: u16, impls: Fb) -> Self {
-        Self { buf, width, height, impls, clip1: (0, 0), clip2: (width, height) }
+        Self { buf, width, height, impls, clip1: (0, 0), clip2: (width - 1, height - 1) }
     }
 
     pub fn buf(&self) -> &[u8] {
@@ -66,26 +71,31 @@ impl<'buf, Fb: FbImpl> FrameBuffer<'buf, Fb> {
 
     #[inline(always)]
     fn set_pixel(&mut self, x: u16, y: u16, color: u8) {
-        if self.clip1.0 <= x && x < self.clip2.0 && self.clip1.1 <= y && y < self.clip2.1 {
+        if self.clip1.0 <= x && x <= self.clip2.0 && self.clip1.1 <= y && y <= self.clip2.1 {
             self.buf.as_mut()[x as usize + (y * self.width) as usize] = color;
         }
     }
 
+    /// Return pixel width of the display and framebuffer.
     pub fn width(&self) -> u16 {
         self.width
     }
 
+    /// Return pixel height of the display.  The framebuffer may be higher to allow
+    /// easy line-scrolling using DMA.
     pub fn height(&self) -> u16 {
         self.height
     }
 
+    /// Set clip rectangle with (inclusive) corners clip1 and clip2.
     pub fn set_clip(&mut self, clip1: (u16, u16), clip2: (u16, u16)) {
-        self.clip1.0 = clip1.0.min(self.width);
-        self.clip1.1 = clip1.1.min(self.height);
-        self.clip2.0 = clip2.0.min(self.width).max(self.clip1.0);
-        self.clip2.1 = clip2.1.min(self.height).max(self.clip1.1);
+        self.clip1.0 = clip1.0.min(self.width - 1);
+        self.clip1.1 = clip1.1.min(self.height - 1);
+        self.clip2.0 = clip2.0.min(self.width - 1).max(self.clip1.0);
+        self.clip2.1 = clip2.1.min(self.height - 1).max(self.clip1.1);
     }
 
+    /// Draw text with the given font at (px, py).
     pub fn text(&mut self, font: &Font, mut px: u16, py: u16, text: &[u8], colors: &Colors) {
         let size = font.size();
         for &chr in text {
@@ -97,6 +107,7 @@ impl<'buf, Fb: FbImpl> FrameBuffer<'buf, Fb> {
         }
     }
 
+    /// Draw a 2-bpp image at (px, py).
     pub fn image(&mut self, px: u16, py: u16, img: &[u8], size: (u16, u16), colors: &Colors) {
         let mut bits = 0x1;
         let mut off = 0;
@@ -112,12 +123,22 @@ impl<'buf, Fb: FbImpl> FrameBuffer<'buf, Fb> {
         }
     }
 
+    /// Draw a line between (inclusive) coordinates (x1, y1) and (x2, y2).
     pub fn line(&mut self, x1: u16, y1: u16, x2: u16, y2: u16, color: u8) {
         for (x, y) in Bresenham::new((x1 as isize, y1 as isize), (x2 as isize, y2 as isize)) {
             self.set_pixel(x as u16, y as u16, color);
         }
+        self.set_pixel(x2, y2, color);
     }
 
+    /// Clear the whole screen with this color.
+    pub fn clear(&mut self, color: u8) {
+        let x2 = self.width;
+        let y2 = self.height;
+        self.rect(0, 0, x2 - 1, y2 - 1, color);
+    }
+
+    /// Draw a rectangle outline with (inclusive) coordinates (x1, y1) to (x2, y2).
     pub fn rect_outline(&mut self, x1: u16, y1: u16, x2: u16, y2: u16, color: u8) {
         self.line(x1, y1, x1, y2, color);
         self.line(x1, y2, x2, y2, color);
@@ -125,27 +146,25 @@ impl<'buf, Fb: FbImpl> FrameBuffer<'buf, Fb> {
         self.line(x2, y1, x1, y1, color);
     }
 
-    pub fn clear(&mut self, color: u8) {
-        let x2 = self.width;
-        let y2 = self.height;
-        self.rect(0, 0, x2, y2, color);
-    }
-
+    /// Draw a filled rectangle with (inclusive) coordinates (x1, y1) to (x2, y2).
     pub fn rect(&mut self, mut x1: u16, mut y1: u16, mut x2: u16, mut y2: u16, color: u8) {
         x1 = x1.max(self.clip1.0).min(self.clip2.0);
-        x2 = x2.max(x1).min(self.clip2.0);
         y1 = y1.max(self.clip1.1).min(self.clip2.1);
-        y2 = y2.max(y1).min(self.clip2.1);
+        // need to add 1 since impls.fill_rect needs exclusive bottom-right corner.
+        x2 = (x2 + 1).max(x1).min(self.clip2.0 + 1);
+        y2 = (y2 + 1).max(y1).min(self.clip2.1 + 1);
 
         self.impls.fill_rect(self.buf.as_mut(), x1, y1, x2, y2, color);
     }
 
+    /// Copy a rectangle with (inclusive) coordinates (x1, y1) to (x2, y2), to
+    /// destination top-left corner (dx, dy).
     pub fn copy_rect(&mut self, mut x1: u16, mut y1: u16, x2: u16, y2: u16, mut dx: u16, mut dy: u16) {
-        if x1 >= self.width || y1 >= self.height || dx >= self.clip2.0 || dy >= self.clip2.1 {
+        if x1 >= self.width || y1 >= self.height || dx > self.clip2.0 || dy > self.clip2.1 {
             return;
         }
-        let mut nx = x2.max(x1) - x1;
-        let mut ny = y2.max(y1) - y1;
+        let mut nx = 1 + x2.max(x1) - x1;
+        let mut ny = 1 + y2.max(y1) - y1;
 
         if dx < self.clip1.0 {
             nx -= self.clip1.0 - dx;
@@ -157,20 +176,23 @@ impl<'buf, Fb: FbImpl> FrameBuffer<'buf, Fb> {
             y1 += self.clip1.1 - dy;
             dy = self.clip1.1;
         }
-        nx = nx.min(self.clip2.0 - dx);
-        ny = ny.min(self.clip2.1 - dy);
+        nx = nx.min(1 + self.clip2.0 - dx);
+        ny = ny.min(1 + self.clip2.1 - dy);
 
         self.impls.copy_rect(self.buf.as_mut(), x1, y1, dx, dy, nx, ny);
     }
 
+    /// Scroll framebuffer up by *line_height* pixels.
     pub fn scroll_up(&mut self, line_height: u16) {
         self.impls.copy_rect(self.buf.as_mut(), 0, line_height, 0, 0, self.width, self.height);
     }
 
-    pub fn clear_scroll_area(&mut self) {
-        for el in &mut self.buf.as_mut()[(self.width*self.height) as usize..] { *el = 0; }
+    /// Clear the non-displayed area of the framebuffer.
+    pub fn clear_scroll_area(&mut self, color: u8) {
+        for el in &mut self.buf.as_mut()[(self.width*self.height) as usize..] { *el = color; }
     }
 
+    /// Activate this framebuffer.
     pub fn activate(&mut self) {
         self.impls.activate(self.buf.as_mut());
     }

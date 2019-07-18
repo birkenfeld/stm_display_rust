@@ -108,9 +108,9 @@ while 1:
         if x >= 480:
             x = 226
             d.set_color(BLACK)
-            d.rect((226, 16), (480, 110))
+            d.rect((226, 16), (479, 109))
             d.set_color(GRAY)
-            d.lines((226, 61), (479, 61))
+            d.lines((226, 61), (478, 60))
         else:
             d.set_color(BLUE)
             y = min(max(int(61 - (t2-10)*50), 17), 110)
