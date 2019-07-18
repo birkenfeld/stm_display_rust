@@ -9,8 +9,8 @@ use nix::{pty, fcntl::OFlag};
 #[derive(StructOpt)]
 #[structopt(about = "Box display simulator.")]
 pub struct Options {
-    #[structopt(short="x", help="Scale display up by a factor of 2")]
-    scale_x2: bool,
+    #[structopt(short="x", help="Scale display up by a factor of 2 or 4")]
+    scale: u8,
 }
 
 fn prepare_tty() -> nix::Result<(Receiver<u8>, File)> {
@@ -89,10 +89,15 @@ fn main() {
     // open the pseudo-tty for clients to connect to
     let (rx, fd) = prepare_tty().expect("could not create pseudo tty");
 
+    let scale = match args.scale {
+        2 => minifb::Scale::X2,
+        4 => minifb::Scale::X4,
+        _ => minifb::Scale::X1,
+    };
+
     // open the window
     let mut win = minifb::Window::new("Display", 480, 128, minifb::WindowOptions {
-        scale: if args.scale_x2 { minifb::Scale::X2 } else { minifb::Scale::X1 },
-        .. Default::default()
+        scale, .. Default::default()
     }).expect("could not create window");
 
     // prepare color LUT (this is done in hardware on the STM)
