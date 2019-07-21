@@ -35,6 +35,7 @@ pub const FONTS: &[Font] = &[
     include!("font_medium.rs"),
     include!("font_large.rs"),
     include!("font_light.rs"),
+    include!("font_icons.rs"),
 ];
 
 pub const CONSOLEFONT: &Font = &FONTS[0];
