@@ -10,7 +10,7 @@ use nix::{pty, fcntl::OFlag};
 #[structopt(about = "Box display simulator.")]
 pub struct Options {
     #[structopt(short="x", help="Scale display up by a factor of 2 or 4")]
-    scale: u8,
+    scale: Option<u8>,
 }
 
 fn prepare_tty() -> nix::Result<(Receiver<u8>, File)> {
@@ -90,8 +90,8 @@ fn main() {
     let (rx, fd) = prepare_tty().expect("could not create pseudo tty");
 
     let scale = match args.scale {
-        2 => minifb::Scale::X2,
-        4 => minifb::Scale::X4,
+        Some(2) => minifb::Scale::X2,
+        Some(4) => minifb::Scale::X4,
         _ => minifb::Scale::X1,
     };
 
