@@ -21,7 +21,7 @@ connected equipment.
 
 ### Build
 
-Using nightly Rust and cargo, just do a `cargo build --release` in
+Using a recent Rust compiler, just do a `cargo build --release` in
 the `firmware` directory.
 
 ### Flash
