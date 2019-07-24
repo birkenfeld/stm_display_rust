@@ -23,6 +23,9 @@ pub const CHARH: u16 = framebuf::CONSOLEFONT.size().1;
 ///
 /// - 0: generic/no customization
 /// - 'M': MLZ
+#[cfg(not(feature = "customer-mlz"))]
+const CUSTOMER: u8 = 0;
+#[cfg(feature = "customer-mlz")]
 const CUSTOMER: u8 = b'M';
 
 /// Modes:

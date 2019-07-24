@@ -31,4 +31,6 @@ features = ["rt", "stm32f429"]
 path = "../lib"
 
 [features]
-test-mode = []
+test-mode = ["display/test-mode"]
+customer-mlz = ["display/customer-mlz"]
+default = ["customer-mlz"]
