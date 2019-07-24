@@ -320,6 +320,11 @@ fn main() -> ! {
     // Switch to console if nothing else programmed
     disp.console().activate();
 
+    // for i in 0..512 {
+    //     eeprom.write_at_addr(i*0x40, &[0; 0x40]).unwrap();
+    // }
+    // panic!("done");
+
     // Load pre-programmed startup sequence from EEPROM
     let mut startup_buf = [0; 256];
     if let Ok(code) = eeprom.read_stored_entry(0, 64, &mut startup_buf) {

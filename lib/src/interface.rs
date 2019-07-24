@@ -315,7 +315,8 @@ impl<'buf, Tx: WriteToHost, Th: TouchHandler, Fb: FbImpl> DisplayState<'buf, Tx,
             }
             CMD_IDENT => {
                 self.con.write_to_host(&[0x1b, 0x1b, 0x05, 0xf3]);
-                self.con.write_to_host(&crate::IDENT);
+                self.con.write_to_host(&[crate::CUSTOMER, crate::MODE]);
+                self.con.write_to_host(&crate::VERSION);
             }
             _ => {}
         }
