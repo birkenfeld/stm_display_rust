@@ -29,3 +29,6 @@ features = ["rt", "stm32f429"]
 
 [dependencies.display]
 path = "../lib"
+
+[features]
+test-mode = []

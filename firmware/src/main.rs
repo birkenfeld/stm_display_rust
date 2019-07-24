@@ -15,13 +15,14 @@ use hal::timer::{Timer, Event};
 use hal::serial::{Serial, config::Config as SerialConfig};
 use hal::rcc::RccExt;
 use hal::gpio::{GpioExt, Speed};
-use embedded_hal::digital::v2::{InputPin, OutputPin};
+use embedded_hal::digital::v2::OutputPin;
 use core::sync::atomic::{AtomicBool, Ordering};
 
 #[macro_use]
 mod regutil;
 mod i2ceeprom;
 mod spiflash;
+#[cfg(feature="test-mode")]
 mod test_mode;
 mod konami_mode;
 
@@ -117,13 +118,16 @@ fn main() -> ! {
     let mut touch_timer = Timer::tim4(peri.TIM4, Hertz(100), clocks);
 
     // External Flash memory via SPI
-    let cs = gpiob.pb12.into_push_pull_output();
-    let sclk = gpiob.pb13.into_alternate_af5();
-    let miso = gpiob.pb14.into_alternate_af5();
-    let mosi = gpiob.pb15.into_alternate_af5();
-    let spi2 = hal::spi::Spi::spi2(peri.SPI2, (sclk, miso, mosi),
-        embedded_hal::spi::MODE_0, Hertz(40_000_000), clocks);
-    let mut spi_flash = spiflash::SPIFlash::new(spi2, cs);
+    #[cfg(feature="test-mode")]
+    let mut spi_flash = {
+        let cs = gpiob.pb12.into_push_pull_output();
+        let sclk = gpiob.pb13.into_alternate_af5();
+        let miso = gpiob.pb14.into_alternate_af5();
+        let mosi = gpiob.pb15.into_alternate_af5();
+        let spi2 = hal::spi::Spi::spi2(peri.SPI2, (sclk, miso, mosi),
+                                       embedded_hal::spi::MODE_0, Hertz(40_000_000), clocks);
+        spiflash::SPIFlash::new(spi2, cs)
+    };
 
     // Console UART (USART #1)
     let utx = gpioa.pa9 .into_alternate_af7();
@@ -163,7 +167,7 @@ fn main() -> ! {
     gpioe.pe15.into_alternate_af14().set_speed(Speed::VeryHigh);
 
     // Extension header pins
-    let testmode_pin = gpioe.pe1.into_pull_down_input();
+    gpioe.pe1.into_pull_down_input();
     gpioe.pe0.into_pull_down_input();
     gpiob.pb6.into_pull_down_input();
     gpiob.pb5.into_pull_down_input();
@@ -310,9 +314,8 @@ fn main() -> ! {
     let mut uart = unsafe { UART_RX.split().1 };
     let mut touch = unsafe { TOUCH_EVT.split().1 };
 
-    if testmode_pin.is_high().unwrap() {
-        test_mode::run(&mut disp, &mut spi_flash, &mut eeprom);
-    }
+    #[cfg(feature="test-mode")]
+    test_mode::run(&mut disp, &mut spi_flash, &mut eeprom);
 
     // Switch to console if nothing else programmed
     disp.console().activate();
@@ -324,16 +327,6 @@ fn main() -> ! {
             unsafe { UART_RX.enqueue_unchecked(byte); }
         }
     }
-
-    /* -- Touch calibration mode --
-    let (gfx, _) = disp.split();
-    gfx.activate();
-    gfx.clear(15);
-    loop {
-        let (x, _) = wait_touch();
-        gfx.rect(x - 1, 0, x + 1, 127, 4);
-    }
-    */
 
     let mut touch_ring = wheelbuf::WheelBuf::new([0u16; 8]);
 

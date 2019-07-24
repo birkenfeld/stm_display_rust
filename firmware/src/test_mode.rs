@@ -3,7 +3,7 @@
 use embedded_hal::digital::v2::OutputPin;
 use display::interface::TouchHandler;
 use display::framebuf::{MEDIUMFONT as FONT, BLACK_ON_WHITE, RED_ON_WHITE, GREEN_ON_WHITE};
-use crate::{recv_uart, DisplayState, spiflash::SPIFlash, i2ceeprom::I2CEEprom};
+use crate::{DisplayState, spiflash::SPIFlash, i2ceeprom::I2CEEprom};
 
 const DATA: &[u8; 16] = b"\xff\xaa\x55\x00Test data\x00\x00\x00";
 
@@ -14,7 +14,7 @@ const P_X2: u16 = P_X + 88;
 
 pub fn run<T1, T2: OutputPin>(disp: &mut DisplayState, spi_flash: &mut SPIFlash<T1, T2>,
                               eeprom: &mut I2CEEprom) {
-    let (gfx, con, touch) = disp.split();
+    let (gfx, _con, touch) = disp.split();
 
     // #1. Display
     gfx.clear(15);
@@ -68,22 +68,33 @@ pub fn run<T1, T2: OutputPin>(disp: &mut DisplayState, spi_flash: &mut SPIFlash<
     }
 
     // #4. UART
-    gfx.text(FONT, P_X, P_Y+32, b"UART......", BLACK_ON_WHITE);
+    // SKIPPED.
+    // gfx.text(FONT, P_X, P_Y+32, b"UART......", BLACK_ON_WHITE);
 
-    let mut failed = false;
-    for &ch in DATA {
-        con.write_to_host(&[ch]);
-        if recv_uart() != ch {
-            gfx.text(FONT, P_X2, P_Y+32, b"FAIL", RED_ON_WHITE);
-            failed = true;
-            break;
-        }
-    }
-    if !failed {
-        gfx.text(FONT, P_X2, P_Y+32, b"OK", GREEN_ON_WHITE);
-    }
+    // let mut failed = false;
+    // for &ch in DATA {
+    //     con.write_to_host(&[ch]);
+    //     if recv_uart() != ch {
+    //         gfx.text(FONT, P_X2, P_Y+32, b"FAIL", RED_ON_WHITE);
+    //         failed = true;
+    //         break;
+    //     }
+    // }
+    // if !failed {
+    //     gfx.text(FONT, P_X2, P_Y+32, b"OK", GREEN_ON_WHITE);
+    // }
 
     // #5. Touch
+
+    /* For touch calibration */
+    // gfx.clear(15);
+    // loop {
+    //     let (x, _) = touch.wait();
+    //     gfx.rect(x - 1, 0, x + 1, 127, 4);
+    //     touch.wait();
+    //     gfx.clear(15);
+    // }
+
     gfx.text(FONT, P_X, P_Y+48, b"Touch.....", BLACK_ON_WHITE);
     gfx.rect_outline(8, 20, 120, 120, 0);
     gfx.text(FONT, 20, 56, b"Touch here", BLACK_ON_WHITE);
