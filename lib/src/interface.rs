@@ -37,8 +37,6 @@ const CMD_RESET:         u8 = 0xf1;
 const CMD_SET_STARTUP:   u8 = 0xf2;
 const CMD_IDENT:         u8 = 0xf3;
 
-const RESET_MAGIC:    &[u8] = &[0xcb, 0xef, 0x20, 0x18];
-
 const BOOT_STRING:    &[u8] = b"\x1b[0mSeaBIOS ";
 
 #[derive(Default, Clone, Copy)]
@@ -294,12 +292,12 @@ impl<'buf, Tx: WriteToHost, Th: TouchHandler, Fb: FbImpl> DisplayState<'buf, Tx,
                 self.saved[(cmd[1] - CMD_SAVE_ATTRS) as usize] = self.cur;
             }
             CMD_BOOTMODE => if data_len >= 4 {
-                if &cmd[2..6] == RESET_MAGIC {
+                if &cmd[2..6] == &crate::FW_IDENT[..4] {
                     return Action::Bootloader;
                 }
             },
             CMD_RESET => if data_len >= 4 {
-                if &cmd[2..6] == RESET_MAGIC {
+                if &cmd[2..6] == &crate::FW_IDENT[..4] {
                     return Action::Reset;
                 }
             },
@@ -315,8 +313,7 @@ impl<'buf, Tx: WriteToHost, Th: TouchHandler, Fb: FbImpl> DisplayState<'buf, Tx,
             }
             CMD_IDENT => {
                 self.con.write_to_host(&[0x1b, 0x1b, 0x05, 0xf3]);
-                self.con.write_to_host(&[crate::CUSTOMER, crate::MODE]);
-                self.con.write_to_host(&crate::VERSION);
+                self.con.write_to_host(&crate::FW_IDENT[4..]);
             }
             _ => {}
         }

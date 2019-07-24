@@ -45,4 +45,14 @@ const MODE: u8 = 1;
 /// - 1.3: after change of line/rect coordinate args
 /// - 1.4: after addition of icon font
 /// - 1.5: reinterpretation of the ident string
-const VERSION: [u8; 2] = [1, 5];
+/// - 1.6: adding the identification to the binary
+const VER_MAJOR: u8 = 1;
+const VER_MINOR: u8 = 6;
+
+/// Identify the firmware: magic number, followed by the reply to
+/// the IDENT command (4 bytes with customer, mode, version).
+/// This is placed at the very end of the firmware binary.
+#[link_section = ".fw_ident"]
+#[export_name = "FW_IDENT"]
+pub static FW_IDENT: [u8; 8] = [0xcb, 0xef, 0x20, 0x18,
+                                CUSTOMER, MODE, VER_MAJOR, VER_MINOR];

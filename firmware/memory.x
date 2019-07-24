@@ -44,3 +44,17 @@ SECTIONS
   } > SRAM3
 }
 INSERT AFTER .bss;
+
+/* Ensure FW_IDENT is put into the binary, at the end. */
+
+EXTERN(FW_IDENT);
+
+SECTIONS
+{
+  .fw_ident : ALIGN(4)
+  {
+    *(.fw_ident);
+    . = ALIGN(4);
+  } > FLASH
+}
+INSERT AFTER .rodata;
