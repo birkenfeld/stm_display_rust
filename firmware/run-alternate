@@ -4,5 +4,7 @@
 # is not working for you.  Needs the stlink utility suite from here:
 # https://github.com/texane/stlink
 
-arm-none-eabi-objcopy -Obinary "$1" "$1.bin"
-st-flash write "$1.bin" 0x08000000
+#BIN="$1"
+BIN="target/thumbv7em-none-eabihf/release/display_firmware"
+arm-none-eabi-objcopy -Obinary "$BIN" "$BIN.bin"
+st-flash write "$BIN.bin" 0x08000000

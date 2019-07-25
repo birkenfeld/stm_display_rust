@@ -52,11 +52,11 @@ pub fn run<T1, T2: OutputPin>(disp: &mut DisplayState, spi_flash: &mut SPIFlash<
     // #3. EEPROM
     gfx.text(FONT, P_X, P_Y+16, b"E\xfdPROM....", BLACK_ON_WHITE);
 
-    if let Err(_) = eeprom.write_at_addr(128, DATA) {
+    if let Err(_) = eeprom.write_at_addr(0x1000, DATA) {
         gfx.text(FONT, P_X2, P_Y+16, b"FAIL", RED_ON_WHITE);
     } else {
         let mut buf = [0; 16];
-        if let Err(_) = eeprom.read_at_addr(128, &mut buf) {
+        if let Err(_) = eeprom.read_at_addr(0x1000, &mut buf) {
             gfx.text(FONT, P_X2, P_Y+16, b"FAIL", RED_ON_WHITE);
         } else {
             if &buf != DATA {
