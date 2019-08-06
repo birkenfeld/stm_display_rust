@@ -16,6 +16,23 @@ pub fn run<T1, T2: OutputPin>(disp: &mut DisplayState, spi_flash: &mut SPIFlash<
                               eeprom: &mut I2CEEprom) {
     let (gfx, _con, touch) = disp.split();
 
+/*
+    for i in 0..64 {
+        write!(LTDC.layer1.clutwr: clutadd = i as u8, red = i*4, green = 0, blue = 0);
+        write!(LTDC.layer1.clutwr: clutadd = i as u8 + 64, red = 0, green = i*4, blue = 0);
+        write!(LTDC.layer1.clutwr: clutadd = i as u8 + 128, red = 0, green = 0, blue = i*4);
+        write!(LTDC.layer1.clutwr: clutadd = i as u8 + 192, red = i*4, green = i*4, blue = i*4);
+    }
+
+    gfx.clear(0);
+    for i in 0..64 {
+        gfx.rect(i*6, 0,   i*6+5, 31,  i as u8);
+        gfx.rect(i*6, 32,  i*6+5, 63,  i as u8+64);
+        gfx.rect(i*6, 64,  i*6+5, 95,  i as u8+128);
+        gfx.rect(i*6, 96,  i*6+5, 127, i as u8+192);
+    }
+*/
+
     // #1. Display
     gfx.clear(15);
     gfx.activate();
@@ -25,11 +42,11 @@ pub fn run<T1, T2: OutputPin>(disp: &mut DisplayState, spi_flash: &mut SPIFlash<
     gfx.text(FONT, 16, 48, b"Make sure no pixel errors are present.", BLACK_ON_WHITE);
     touch.wait();
 
-    gfx.clear(9);
+    gfx.clear(196);
     touch.wait();
-    gfx.clear(10);
+    gfx.clear(46);
     touch.wait();
-    gfx.clear(12);
+    gfx.clear(21);
     touch.wait();
     gfx.clear(15);
     touch.wait();

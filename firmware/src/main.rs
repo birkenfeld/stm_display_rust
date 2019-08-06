@@ -143,28 +143,28 @@ fn main() -> ! {
     let mut eeprom = i2ceeprom::I2CEEprom::new(i2c_scl, i2c_sda);
 
     // LCD pins
-    gpioa.pa3 .into_alternate_af14().set_speed(Speed::VeryHigh);
-    gpioa.pa4 .into_alternate_af14().set_speed(Speed::VeryHigh);
-    gpioa.pa6 .into_alternate_af14().set_speed(Speed::VeryHigh);
-    gpioa.pa11.into_alternate_af14().set_speed(Speed::VeryHigh);
-    gpioa.pa12.into_alternate_af14().set_speed(Speed::VeryHigh);
-    gpiob.pb0 .into_alternate_af9() .set_speed(Speed::VeryHigh);
-    gpiob.pb1 .into_alternate_af9() .set_speed(Speed::VeryHigh);
-    gpiob.pb8 .into_alternate_af14().set_speed(Speed::VeryHigh);
-    gpiob.pb9 .into_alternate_af14().set_speed(Speed::VeryHigh);
-    gpiob.pb10.into_alternate_af14().set_speed(Speed::VeryHigh);
-    gpiob.pb11.into_alternate_af14().set_speed(Speed::VeryHigh);
-    gpioc.pc6 .into_alternate_af14().set_speed(Speed::VeryHigh);
-    gpioc.pc7 .into_alternate_af14().set_speed(Speed::VeryHigh);
-    gpioc.pc10.into_alternate_af14().set_speed(Speed::VeryHigh);
-    gpiod.pd3 .into_alternate_af14().set_speed(Speed::VeryHigh);
-    gpiod.pd6 .into_alternate_af14().set_speed(Speed::VeryHigh);
-    gpiod.pd10.into_alternate_af14().set_speed(Speed::VeryHigh);
-    gpioe.pe11.into_alternate_af14().set_speed(Speed::VeryHigh);
-    gpioe.pe12.into_alternate_af14().set_speed(Speed::VeryHigh);
-    gpioe.pe13.into_alternate_af14().set_speed(Speed::VeryHigh);
-    gpioe.pe14.into_alternate_af14().set_speed(Speed::VeryHigh);
-    gpioe.pe15.into_alternate_af14().set_speed(Speed::VeryHigh);
+    gpioa.pa3 .into_alternate_af14().set_speed(Speed::VeryHigh); // B5
+    gpioa.pa4 .into_alternate_af14().set_speed(Speed::VeryHigh); // VSYNC
+    gpioa.pa6 .into_alternate_af14().set_speed(Speed::VeryHigh); // G2
+    gpioa.pa11.into_alternate_af14().set_speed(Speed::VeryHigh); // R4
+    gpioa.pa12.into_alternate_af14().set_speed(Speed::VeryHigh); // R5
+    gpiob.pb0 .into_alternate_af9() .set_speed(Speed::VeryHigh); // R3
+    gpiob.pb1 .into_alternate_af9() .set_speed(Speed::VeryHigh); // R6
+    gpiob.pb8 .into_alternate_af14().set_speed(Speed::VeryHigh); // B6
+    gpiob.pb9 .into_alternate_af14().set_speed(Speed::VeryHigh); // B7
+    gpiob.pb10.into_alternate_af14().set_speed(Speed::VeryHigh); // G4
+    gpiob.pb11.into_alternate_af14().set_speed(Speed::VeryHigh); // G5
+    gpioc.pc6 .into_alternate_af14().set_speed(Speed::VeryHigh); // HSYNC
+    gpioc.pc7 .into_alternate_af14().set_speed(Speed::VeryHigh); // G6
+    gpioc.pc10.into_alternate_af14().set_speed(Speed::VeryHigh); // R2
+    gpiod.pd3 .into_alternate_af14().set_speed(Speed::VeryHigh); // G7
+    gpiod.pd6 .into_alternate_af14().set_speed(Speed::VeryHigh); // B2
+    gpiod.pd10.into_alternate_af14().set_speed(Speed::VeryHigh); // B3
+    gpioe.pe11.into_alternate_af14().set_speed(Speed::VeryHigh); // G3
+    gpioe.pe12.into_alternate_af14().set_speed(Speed::VeryHigh); // B4
+    gpioe.pe13.into_alternate_af14().set_speed(Speed::VeryHigh); // DE
+    gpioe.pe14.into_alternate_af14().set_speed(Speed::VeryHigh); // CLK
+    gpioe.pe15.into_alternate_af14().set_speed(Speed::VeryHigh); // R7
 
     // Extension header pins
     gpioe.pe1.into_pull_down_input();
