@@ -1,7 +1,7 @@
 #![no_main]
 #![no_std]
 
-extern crate panic_semihosting;
+extern crate panic_halt;
 
 use stm32f4::stm32f429 as stm;
 use stm::interrupt;
