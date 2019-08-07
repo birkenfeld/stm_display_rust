@@ -3,7 +3,7 @@
 use embedded_hal::digital::v2::OutputPin;
 use display::interface::TouchHandler;
 use display::framebuf::{MEDIUMFONT as FONT, BLACK_ON_WHITE, RED_ON_WHITE, GREEN_ON_WHITE};
-use crate::{DisplayState, spiflash::SPIFlash, i2ceeprom::I2CEEprom};
+use crate::{stm, DisplayState, spiflash::SPIFlash, i2ceeprom::I2CEEprom};
 
 const DATA: &[u8; 16] = b"\xff\xaa\x55\x00Test data\x00\x00\x00";
 
@@ -16,7 +16,17 @@ pub fn run<T1, T2: OutputPin>(disp: &mut DisplayState, spi_flash: &mut SPIFlash<
                               eeprom: &mut I2CEEprom) {
     let (gfx, _con, touch) = disp.split();
 
-/*
+    // #1. Display
+    gfx.clear(15);
+    gfx.activate();
+
+    gfx.line(0, 8, 480, 8, 0);
+    gfx.text(FONT, 176, 0, b"Self test active", BLACK_ON_WHITE);
+    gfx.text(FONT, 16, 32, b"Touch anywhere to cycle through colors.", BLACK_ON_WHITE);
+    gfx.text(FONT, 16, 48, b"Make sure no pixel errors are present.", BLACK_ON_WHITE);
+    touch.wait();
+
+    // Set color palette for checking shorts between color pins.
     for i in 0..64 {
         write!(LTDC.layer1.clutwr: clutadd = i as u8, red = i*4, green = 0, blue = 0);
         write!(LTDC.layer1.clutwr: clutadd = i as u8 + 64, red = 0, green = i*4, blue = 0);
@@ -26,21 +36,17 @@ pub fn run<T1, T2: OutputPin>(disp: &mut DisplayState, spi_flash: &mut SPIFlash<
 
     gfx.clear(0);
     for i in 0..64 {
-        gfx.rect(i*6, 0,   i*6+5, 31,  i as u8);
-        gfx.rect(i*6, 32,  i*6+5, 63,  i as u8+64);
-        gfx.rect(i*6, 64,  i*6+5, 95,  i as u8+128);
-        gfx.rect(i*6, 96,  i*6+5, 127, i as u8+192);
+        gfx.rect(i*7, 0,  i*7+6, 31,  i as u8);
+        gfx.rect(i*7, 32, i*7+6, 63,  i as u8+64);
+        gfx.rect(i*7, 64, i*7+6, 95,  i as u8+128);
+        gfx.rect(i*7, 96, i*7+6, 127, i as u8+192);
     }
-*/
-
-    // #1. Display
-    gfx.clear(15);
-    gfx.activate();
-    gfx.line(0, 8, 480, 8, 0);
-    gfx.text(FONT, 176, 0, b"Self test active", BLACK_ON_WHITE);
-    gfx.text(FONT, 16, 32, b"Touch anywhere to cycle through colors.", BLACK_ON_WHITE);
-    gfx.text(FONT, 16, 48, b"Make sure no pixel errors are present.", BLACK_ON_WHITE);
     touch.wait();
+
+    // Set default color palette
+    for (i, (r, g, b)) in display::console::get_lut_colors().enumerate() {
+        write!(LTDC.layer1.clutwr: clutadd = i as u8, red = r, green = g, blue = b);
+    }
 
     gfx.clear(196);
     touch.wait();
