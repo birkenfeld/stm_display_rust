@@ -232,6 +232,7 @@ fn main() -> ! {
     write!(LTDC.awcr: aav = H_WIN_START + H_ACTIVE, aah = V_WIN_START + V_ACTIVE);
     write!(LTDC.twcr: totalw = H_WIN_START + H_ACTIVE + H_FRONTPORCH,
            totalh = V_WIN_START + V_ACTIVE + V_FRONTPORCH);
+    modif!(LTDC.gcr: pcpol = true);  // inverted pixel clock
 
     // Configure layer 1 (main framebuffer)
 
