@@ -46,8 +46,9 @@ const MODE: u8 = 1;
 /// - 1.4: after addition of icon font
 /// - 1.5: reinterpretation of the ident string
 /// - 1.6: adding the identification to the binary
+/// - 1.7: several fixes in firmware test mode
 const VER_MAJOR: u8 = 1;
-const VER_MINOR: u8 = 6;
+const VER_MINOR: u8 = 7;
 
 /// Identify the firmware: magic number, followed by the reply to
 /// the IDENT command (4 bytes with customer, mode, version).
