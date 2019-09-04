@@ -1,0 +1,27 @@
+#!/usr/bin/make -f
+# -*- makefile -*-
+# Sample debian/rules that uses debhelper.
+# This file was originally written by Joey Hess and Craig Small.
+# As a special exception, when this file is copied by dh-make into a
+# dh-make output file, you may use that output file without restriction.
+# This special exception was added by Craig Small in version 0.37 of dh-make.
+
+# Uncomment this to turn on verbose mode.
+#export DH_VERBOSE=1
+
+CARGO=$(HOME)/.cargo/bin/cargo
+
+override_dh_auto_configure:
+	curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- --no-modify-path -y
+	$$HOME/.cargo/bin/rustup target add thumbv7em-none-eabihf
+
+override_dh_auto_build:
+	make -C firmware build CARGO=$(CARGO)
+	make -C simulator build CARGO=$(CARGO)
+
+override_dh_auto_install:
+	make -C firmware install CARGO=$(CARGO) DESTDIR=../debian/tmp
+	make -C simulator install CARGO=$(CARGO) DESTDIR=../debian/tmp
+
+%:
+	dh $@

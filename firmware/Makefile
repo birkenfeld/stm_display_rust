@@ -1,7 +1,9 @@
 .PHONY: build install
 
+CARGO = cargo
+
 build:
-	cargo build --release
+	$(CARGO) build --release
 
 install: build
 	objcopy -Obinary target/thumbv7em-none-eabihf/release/display_firmware display_fw.bin

@@ -1,0 +1,24 @@
+Source: display-firmware
+Section: misc
+Priority: optional
+Maintainer: Georg Brandl <g.brandl@fz-juelich.de>
+Build-Depends: debhelper (>= 11~),
+ curl,
+ binutils-multiarch,
+ libx11-dev,
+ libxcursor-dev
+Standards-Version: 4.1.4
+
+Package: display-firmware
+Architecture: any
+Depends: ${misc:Depends},
+ stm32flash
+Description: Firmware for the MLZ control box display
+ A ready-to-flash firmware image for the MLZ control box display.
+
+Package: display-simulator
+Architecture: any
+Depends: ${shlibs:Depends},
+ ${misc:Depends}
+Description: Simulator for the MLZ control box display
+ A locally running simulator for the MLZ control box display.
