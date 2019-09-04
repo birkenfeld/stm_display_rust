@@ -7,8 +7,8 @@ license = "GPL-2.0+"
 edition = "2018"
 
 [dependencies]
-nix = "0.14.1"
-minifb = "0.11.2"
-structopt = "0.2.12"
+nix = "0.15.0"
+minifb = "0.13.0"
+structopt = "0.3.0"
 crossbeam-channel = "0.3.8"
 display = { path = "../lib" }
