@@ -1,5 +1,7 @@
 #![no_std]
 
+use pkg_version::*;
+
 mod icon;
 pub mod interface;
 pub mod framebuf;
@@ -47,8 +49,8 @@ const MODE: u8 = 1;
 /// - 1.5: reinterpretation of the ident string
 /// - 1.6: adding the identification to the binary
 /// - 1.7: several fixes in firmware test mode
-const VER_MAJOR: u8 = 1;
-const VER_MINOR: u8 = 7;
+const VER_MAJOR: u8 = pkg_version_major!();
+const VER_MINOR: u8 = pkg_version_minor!();
 
 /// Identify the firmware: magic number, followed by the reply to
 /// the IDENT command (4 bytes with customer, mode, version).
