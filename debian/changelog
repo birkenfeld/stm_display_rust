@@ -1,3 +1,13 @@
+display-firmware (1.7.2) unstable; urgency=low
+
+  [ Georg Brandl ]
+  * use pkg-version for firmware version
+  * fix architecture of firmware
+
+  [ Jenkins ]
+
+ -- Jenkins <jenkins@debuild.taco.frm2>  Fri, 06 Sep 2019 08:33:41 +0200
+
 display-firmware (1.7.1) unstable; urgency=low
 
   [ Jenkins ]
