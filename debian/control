@@ -10,7 +10,7 @@ Build-Depends: debhelper (>= 11~),
 Standards-Version: 4.1.4
 
 Package: display-firmware
-Architecture: any
+Architecture: all
 Depends: ${misc:Depends},
  stm32flash
 Description: Firmware for the MLZ control box display
