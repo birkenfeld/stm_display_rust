@@ -1,3 +1,12 @@
+display-firmware (1.7.3) unstable; urgency=low
+
+  [ Georg Brandl ]
+  * Makefile: also install testmode fw
+
+  [ Jenkins ]
+
+ -- Jenkins <jenkins@debuild.taco.frm2>  Fri, 11 Oct 2019 11:46:00 +0200
+
 display-firmware (1.7.2) unstable; urgency=low
 
   [ Georg Brandl ]
