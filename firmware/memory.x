@@ -55,6 +55,6 @@ SECTIONS
   {
     *(.fw_ident);
     . = ALIGN(4);
-  } > FLASH
+  } > FLASH AT > FLASH
 }
-INSERT AFTER .rodata;
+INSERT AFTER .data;
