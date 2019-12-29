@@ -5,7 +5,7 @@ extern crate panic_halt;
 
 use stm32f4::stm32f429 as stm;
 use stm::interrupt;
-use cortex_m::{asm, interrupt as interrupts};
+use cortex_m::{asm, interrupt as interrupts, peripheral::{NVIC, SCB}};
 use cortex_m_rt::ExceptionFrame;
 // TODO: make sure queues are not mutably aliased
 use heapless::spsc::{SingleCore, Queue};
@@ -77,7 +77,6 @@ static mut TOUCH_EVT: Queue<u16, U16, u8, SingleCore> = unsafe { Queue(heapless:
 #[cortex_m_rt::entry]
 fn main() -> ! {
     // let mut stdout = hio::hstdout().unwrap();
-    let pcore = cortex_m::Peripherals::take().unwrap();
     let peri = stm::Peripherals::take().unwrap();
 
     // Configure clock
@@ -288,9 +287,10 @@ fn main() -> ! {
     let _ = disp_on.set_high();
 
     // Enable interrupts
-    let mut nvic = pcore.NVIC;
-    nvic.enable(stm::Interrupt::TIM3);
-    nvic.enable(stm::Interrupt::TIM4);
+    unsafe {
+        NVIC::unmask(stm::Interrupt::TIM3);
+        NVIC::unmask(stm::Interrupt::TIM4);
+    }
     blink_timer.listen(Event::TimeOut);
     touch_timer.listen(Event::TimeOut);
 
@@ -310,7 +310,9 @@ fn main() -> ! {
     // Activate USART receiver, make sure the receive event flag is clear
     modif!(USART1.sr: rxne = false);
     modif!(USART1.cr1: rxneie = true);
-    nvic.enable(stm::Interrupt::USART1);
+    unsafe {
+        NVIC::unmask(stm::Interrupt::USART1);
+    }
 
     let mut uart = unsafe { UART_RX.split().1 };
     let mut touch = unsafe { TOUCH_EVT.split().1 };
@@ -348,8 +350,8 @@ fn main() -> ! {
         if let Some(ch) = uart.dequeue() {
             match disp.process_byte(ch) {
                 Action::None => (),
-                Action::Reset => reset(pcore.SCB),
-                Action::Bootloader => reset_to_bootloader(pcore.SCB, bootpin),
+                Action::Reset => reset(),
+                Action::Bootloader => reset_to_bootloader(bootpin),
                 Action::WriteEeprom(len_addr, data_addr, data) => {
                     let _ = eeprom.write_stored_entry(len_addr, data_addr, data);
                 }
@@ -443,18 +445,18 @@ fn DefaultHandler(irqn: i16) {
 }
 
 /// Do a soft-reset of the CPU
-pub fn reset(mut scb: stm::SCB) -> ! {
+pub fn reset() -> ! {
     interrupts::disable();
-    scb.system_reset();
+    SCB::sys_reset();
 }
 
 /// Do a soft-reset of the CPU and set BOOT0 to jump into bootloader
-pub fn reset_to_bootloader<O: OutputPin>(mut scb: stm::SCB, mut pin: O) -> ! {
+pub fn reset_to_bootloader<O: OutputPin>(mut pin: O) -> ! {
     interrupts::disable();
     // Set Boot0 high (keeps high through reset via RC circuit)
     let _ = pin.set_high();
     asm::delay(10000);
-    scb.system_reset();
+    SCB::sys_reset();
 }
 
 // Implement the various target specific traits for the STM.
