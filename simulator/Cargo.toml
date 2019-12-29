@@ -1,14 +1,14 @@
 [package]
 name = "display_simulator"
-version = "1.7.1"
+version = "1.7.4"
 authors = ["Georg Brandl <g.brandl@fz-juelich.de>"]
 description = "Simulator for MLZ control box display"
 license = "GPL-2.0+"
 edition = "2018"
 
 [dependencies]
-nix = "0.15.0"
-minifb = "0.13.0"
+nix = "0.16.1"
+minifb = "0.15.1"
 structopt = "0.3.0"
-crossbeam-channel = "0.3.8"
+crossbeam-channel = "0.4.0"
 display = { path = "../lib", features = ["customer-mlz"] }

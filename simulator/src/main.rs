@@ -67,7 +67,8 @@ impl display::framebuf::FbImpl for FbImpl<'_> {
         }
     }
 
-    fn copy_rect(&mut self, buf: &mut [u8], x1: u16, y1: u16, x2: u16, y2: u16, nx: u16, ny: u16) {
+    fn copy_rect(&mut self, buf: &mut [u8], x1: u16, y1: u16, x2: u16, y2: u16,
+                 nx: u16, ny: u16) {
         let old = buf.to_vec();
         for iy in 0..ny {
             for ix in 0..nx {
@@ -149,11 +150,16 @@ fn main() {
             disp.process_byte(ch);
         }
         // check which framebuffer to display, and prepare the 32-bit buffer
-        let fb = if console_active.get() { disp.console().buf() } else { disp.graphics().buf() };
+        let fb = if console_active.get() {
+            disp.console().buf()
+        } else {
+            disp.graphics().buf()
+        };
         for (out, &color) in fb_32bit.iter_mut().zip(fb) {
             *out = lut[color as usize];
         }
-        win.update_with_buffer(&fb_32bit).expect("could not update window");
+        win.update_with_buffer(&fb_32bit, WIDTH, HEIGHT)
+           .expect("could not update window");
         // process "touch" input by mouse
         let mouse_is_down = win.get_mouse_down(minifb::MouseButton::Left);
         if mouse_is_down && !mouse_was_down {
