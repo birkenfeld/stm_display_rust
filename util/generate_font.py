@@ -123,7 +123,7 @@ for (i, ch) in enumerate(cs):
     ch_width = extent.x_advance
     xof_ch = xof
     if abs(ch_width - wd) > 0.001:
-        if ch != '\ufffd':
+        if ch.isprintable() and ch != '\ufffd':
             if extent.width > wd:
                 print('warning: char {} is too wide (by {}) and will be '
                       'clipped'.format(ch, ch_width - wd))
@@ -132,12 +132,13 @@ for (i, ch) in enumerate(cs):
                     ch, 'wide' if ch_width > wd else 'thin',
                     abs(ch_width - wd)))
         xof_ch += (wd - ch_width) / 2.0
-    if ht + extent.y_bearing + yof < -0.001:
-        print('warning: char {} is too high (by {}) and will be '
-              'clipped'.format(ch, abs(ht + extent.y_bearing + yof)))
-    if extent.y_bearing + extent.height + yof > 0.001:
-        print('warning: char {} is too low (by {}) and will be '
-              'clipped'.format(ch, extent.y_bearing + extent.height + yof))
+    if ch.isprintable() and ch != '\ufffd':
+        if ht + extent.y_bearing + yof < -0.001:
+            print('warning: char {} is too high (by {}) and will be '
+                  'clipped'.format(ch, abs(ht + extent.y_bearing + yof)))
+        if extent.y_bearing + extent.height + yof > 0.001:
+            print('warning: char {} is too low (by {}) and will be '
+                  'clipped'.format(ch, extent.y_bearing + extent.height + yof))
 
     ctx.set_source_rgb(0.0, 0.0, 0.0)
     ctx.paint()
