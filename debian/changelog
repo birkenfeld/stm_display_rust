@@ -1,3 +1,17 @@
+display-firmware (1.8.0) unstable; urgency=low
+
+  [ Georg Brandl ]
+  * fixup memory.x to work with newer linker script
+  * update to newest stm32f4 crates
+  * update other dependencies
+  * ignore more warnings in font generation
+  * bump version
+  * add release makefile
+
+  [ Jenkins ]
+
+ -- Jenkins <jenkins@debuild.taco.frm2>  Fri, 07 Feb 2020 13:21:09 +0100
+
 display-firmware (1.7.3) unstable; urgency=low
 
   [ Georg Brandl ]
