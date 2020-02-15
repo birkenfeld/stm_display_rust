@@ -5,3 +5,4 @@ Cargo.lock
 target/
 examples/
 __pycache__/
+firmware/*.bin

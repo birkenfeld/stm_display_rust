@@ -307,12 +307,9 @@ fn main() -> ! {
         TouchHandler { calib: (6, 150, 1, 0) }
     );
 
-    // Activate USART receiver, make sure the receive event flag is clear
+    // Make sure the USART receive event flag is clear
     modif!(USART1.sr: rxne = false);
     modif!(USART1.cr1: rxneie = true);
-    unsafe {
-        NVIC::unmask(stm::Interrupt::USART1);
-    }
 
     let mut uart = unsafe { UART_RX.split().1 };
     let mut touch = unsafe { TOUCH_EVT.split().1 };
@@ -323,17 +320,17 @@ fn main() -> ! {
     // Switch to console if nothing else programmed
     disp.console().activate();
 
-    // for i in 0..512 {
-    //     eeprom.write_at_addr(i*0x40, &[0; 0x40]).unwrap();
-    // }
-    // panic!("done");
-
     // Load pre-programmed startup sequence from EEPROM
     let mut startup_buf = [0; 256];
     if let Ok(code) = eeprom.read_stored_entry(0, 64, &mut startup_buf) {
         for &byte in code {
             unsafe { UART_RX.enqueue_unchecked(byte); }
         }
+    }
+
+    // Activate USART receiver
+    unsafe {
+        NVIC::unmask(stm::Interrupt::USART1);
     }
 
     let mut touch_ring = wheelbuf::WheelBuf::new([0u16; 8]);
