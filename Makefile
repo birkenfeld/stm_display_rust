@@ -1,4 +1,7 @@
-.PHONY: release release-patch release-minor
+.PHONY: all release release-patch release-minor
+
+all:
+	$(MAKE) -C firmware
 
 release-patch:
 	MODE="patch" $(MAKE) release
