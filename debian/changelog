@@ -1,3 +1,10 @@
+display-firmware (1.9.0) xenial; urgency=medium
+
+  * redirect main makefile to firmware
+  * konami: update bpxe location
+
+ -- Georg Brandl <jenkins@jenkinsng.admin.frm2.tum.de>  Thu, 05 Mar 2020 12:19:28 +0100
+
 display-firmware (1.8.1) unstable; urgency=low
 
   [ Georg Brandl ]
