@@ -49,6 +49,8 @@ const MODE: u8 = 1;
 /// - 1.5: reinterpretation of the ident string
 /// - 1.6: adding the identification to the binary
 /// - 1.7: several fixes in firmware test mode
+/// - 1.8: fix interference of startup instructions and uart
+/// - 1.9: update of reinstall PXE host name
 const VER_MAJOR: u8 = pkg_version_major!();
 const VER_MINOR: u8 = pkg_version_minor!();
 
