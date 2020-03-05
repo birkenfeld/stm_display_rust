@@ -8,7 +8,7 @@ use crate::{DisplayState, Console, FrameBuffer, recv_uart, clear_uart};
 
 pub const ACTIVATION: &[u16] = &[1, 1, 2, 2, 0, 3, 0, 3];
 
-const PXE_SCRIPT: &[u8] = b"http://ictrlfs.ictrl.frm2/public/bpxe/box.pxe";
+const PXE_SCRIPT: &[u8] = b"http://pxe.boxes.frm2.tum.de/box.pxe";
 
 
 pub fn run<P: OutputPin>(disp: &mut DisplayState, reset_pin: &mut P) {
