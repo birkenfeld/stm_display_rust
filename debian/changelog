@@ -1,3 +1,11 @@
+display-firmware (1.12.0) xenial; urgency=medium
+
+  * add more useful very large font
+  * version bump
+  * add missing space for very large font
+
+ -- Georg Brandl <jenkins@jenkinsng.admin.frm2.tum.de>  Mon, 09 Mar 2020 13:58:40 +0100
+
 display-firmware (1.11.0) xenial; urgency=medium
 
   * UNRELEASED
