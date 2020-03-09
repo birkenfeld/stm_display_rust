@@ -1,6 +1,6 @@
 [package]
 name = "display_firmware"
-version = "1.9.0"
+version = "1.10.0"
 authors = ["Georg Brandl <g.brandl@fz-juelich.de>"]
 description = "Firmware for MLZ control box display"
 license = "GPL-2.0+"

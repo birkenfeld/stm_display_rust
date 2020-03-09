@@ -3,12 +3,13 @@
 use cortex_m::asm;
 use embedded_hal::digital::v2::OutputPin;
 use display::interface::TouchHandler;
-use display::framebuf::{FONTS, MEDIUMFONT as FONT, BLACK_ON_WHITE, RED_ON_WHITE};
+use display::framebuf::{MEDIUMFONT as FONT, BLACK_ON_WHITE, RED_ON_WHITE};
 use crate::{DisplayState, Console, FrameBuffer, recv_uart, clear_uart};
 
 pub const ACTIVATION: &[u16] = &[1, 1, 2, 2, 0, 3, 0, 3];
 
 const PXE_SCRIPT: &[u8] = b"http://pxe.boxes.frm2.tum.de/box.pxe";
+const PXE_SCRIPT_WIPE: &[u8] = b"http://pxe.boxes.frm2.tum.de/box_wipe.pxe";
 
 
 pub fn run<P: OutputPin>(disp: &mut DisplayState, reset_pin: &mut P) {
@@ -23,7 +24,8 @@ pub fn run<P: OutputPin>(disp: &mut DisplayState, reset_pin: &mut P) {
     gfx.rect_outline(124, 8, 236, 120, 0);
     gfx.text(FONT, 140, 56, b"Reinstall", RED_ON_WHITE);
     gfx.rect_outline(244, 8, 356, 120, 0);
-    gfx.text(FONT, 260, 56, b"Explode", BLACK_ON_WHITE);
+    gfx.text(FONT, 260, 56, b"Wipe and", RED_ON_WHITE);
+    gfx.text(FONT, 260, 70, b"reinstall", RED_ON_WHITE);
     gfx.rect_outline(364, 8, 472, 120, 0);
     gfx.text(FONT, 380, 56, b"Cancel", BLACK_ON_WHITE);
 
@@ -31,14 +33,12 @@ pub fn run<P: OutputPin>(disp: &mut DisplayState, reset_pin: &mut P) {
     // discard anything the APU sent while the menu was displayed
     clear_uart();
 
-    if x < 240 {
+    if x < 360 {
         was_gfx = false;  // always start with console on reset
         reset_apu(reset_pin);
         if x > 120 {
-            enter_netinstall(gfx, con);
+            enter_netinstall(gfx, con, x > 240);
         }
-    } else if x < 360 {
-        explode(gfx);
     }
 
     if was_gfx {
@@ -66,7 +66,7 @@ fn respond_to_prompt(con: &mut Console, prompt: &[u8], reply: impl IntoIterator<
 }
 
 
-fn enter_netinstall(gfx: &mut FrameBuffer, con: &mut Console) {
+fn enter_netinstall(gfx: &mut FrameBuffer, con: &mut Console, wipe: bool) {
     gfx.clear(15);
     gfx.text(FONT, 20, 30, b"Rebooting for reinstall...", RED_ON_WHITE);
 
@@ -76,7 +76,9 @@ fn enter_netinstall(gfx: &mut FrameBuffer, con: &mut Console) {
     respond_to_prompt(con, b"2JiPXE> ", b"ifconf -c dhcp net0\n");
     gfx.text(FONT, 20 + 4*8, 80, b"DHCP", BLACK_ON_WHITE);
     // TODO: respond to "No configuration methods succeeded" with dhcp again
-    respond_to_prompt(con, b"..... ok", b"imgexec ".iter().chain(PXE_SCRIPT).chain(b"\n"));
+    respond_to_prompt(con, b"..... ok", b"imgexec ".iter().chain(
+        if wipe { PXE_SCRIPT_WIPE } else { PXE_SCRIPT }
+    ).chain(b"\n"));
     gfx.text(FONT, 20 + 9*8, 80, b"IMG", BLACK_ON_WHITE);
 
     // PXE is booting, back to normal mode to let the user know what's happening
@@ -89,28 +91,4 @@ fn reset_apu<P: OutputPin>(reset_pin: &mut P) {
         asm::delay(1000000);
     }
     let _ = reset_pin.set_high();
-}
-
-
-fn explode(gfx: &mut FrameBuffer) {
-    for i in 0..=240 {
-        if i >= 120 {
-            let j = i - 120;
-            gfx.rect(240 - j, 64 - j.min(64), 240 + j, 63 + j.min(64), 11);
-            gfx.rect(240 - i, 0, 239 - j, 127, 1);
-            gfx.rect(240 + j + 1, 0, 240 + i, 127, 1);
-        } else {
-            gfx.rect(240 - i, 64 - i.min(64), 240 + i, 63 + i.min(64), 1);
-        }
-        asm::delay(1000000);
-    }
-    for _ in 0..5 {
-        asm::delay(20000000);
-        gfx.rect(190, 44, 290, 84, 11);
-        asm::delay(20000000);
-        gfx.text(&FONTS[2], 190, 44, b"BOOM?", &[11, 214, 202, 9]);
-    }
-    for _ in 0..10 {
-        asm::delay(20000000);
-    }
 }
