@@ -1,3 +1,9 @@
+display-firmware (1.11.0) xenial; urgency=medium
+
+  * UNRELEASED
+
+ -- Georg Brandl <jenkins@jenkinsng.admin.frm2.tum.de>  Mon, 09 Mar 2020 13:33:24 +0100
+
 display-firmware (1.10.0) xenial; urgency=medium
 
   * bump version
