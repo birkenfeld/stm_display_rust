@@ -3,9 +3,6 @@
 all:
 	$(MAKE) -C firmware
 
-release-patch:
-	MODE="patch" $(MAKE) release
-
 release-minor:
 	MODE="minor" $(MAKE) release
 
