@@ -1,3 +1,11 @@
+display-firmware (1.10.0) xenial; urgency=medium
+
+  * bump version
+  * offer "wipe and reinstall" option
+  * remove release-patch
+
+ -- Georg Brandl <jenkins@jenkinsng.admin.frm2.tum.de>  Mon, 09 Mar 2020 12:53:16 +0100
+
 display-firmware (1.9.0) xenial; urgency=medium
 
   * redirect main makefile to firmware
