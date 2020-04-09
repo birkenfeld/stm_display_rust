@@ -228,7 +228,7 @@ fn main() -> ! {
     // Configure LCD timings
     write!(LTDC.sscr: hsw = H_SYNCPULSE - 1, vsh = V_SYNCPULSE - 1); // -1 required by STM
     write!(LTDC.bpcr: ahbp = H_WIN_START, avbp = V_WIN_START);
-    write!(LTDC.awcr: aav = H_WIN_START + H_ACTIVE, aah = V_WIN_START + V_ACTIVE);
+    write!(LTDC.awcr: aaw = H_WIN_START + H_ACTIVE, aah = V_WIN_START + V_ACTIVE);
     write!(LTDC.twcr: totalw = H_WIN_START + H_ACTIVE + H_FRONTPORCH,
            totalh = V_WIN_START + V_ACTIVE + V_FRONTPORCH);
     modif!(LTDC.gcr: pcpol = true);  // inverted pixel clock
