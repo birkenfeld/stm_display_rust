@@ -1,4 +1,17 @@
-display-firmware (1.12.0) xenial; urgency=medium
+display-firmware (1.13.0) unstable; urgency=medium
+
+  * make very-large font slightly smaller
+  * version bump
+  * add a command to reset the APU
+  * dependency update
+  * optimization: only update buffer when something can have changed
+  * add question mark to the very large font
+  * bump version to 1.13
+  * dependency update
+
+ -- Georg Brandl <jenkins@jenkinsng.admin.frm2.tum.de>  Wed, 22 Jul 2020 22:02:49 +0200
+
+display-firmware (1.12.0) unstable; urgency=medium
 
   * add more useful very large font
   * version bump
@@ -6,13 +19,13 @@ display-firmware (1.12.0) xenial; urgency=medium
 
  -- Georg Brandl <jenkins@jenkinsng.admin.frm2.tum.de>  Mon, 09 Mar 2020 13:58:40 +0100
 
-display-firmware (1.11.0) xenial; urgency=medium
+display-firmware (1.11.0) unstable; urgency=medium
 
   * UNRELEASED
 
  -- Georg Brandl <jenkins@jenkinsng.admin.frm2.tum.de>  Mon, 09 Mar 2020 13:33:24 +0100
 
-display-firmware (1.10.0) xenial; urgency=medium
+display-firmware (1.10.0) unstable; urgency=medium
 
   * bump version
   * offer "wipe and reinstall" option
@@ -20,7 +33,7 @@ display-firmware (1.10.0) xenial; urgency=medium
 
  -- Georg Brandl <jenkins@jenkinsng.admin.frm2.tum.de>  Mon, 09 Mar 2020 12:53:16 +0100
 
-display-firmware (1.9.0) xenial; urgency=medium
+display-firmware (1.9.0) unstable; urgency=medium
 
   * redirect main makefile to firmware
   * konami: update bpxe location
