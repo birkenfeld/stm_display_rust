@@ -7,8 +7,8 @@ license = "GPL-2.0+"
 edition = "2018"
 
 [dependencies]
-nix = "0.16.1"
-minifb = "0.15.1"
+nix = "0.17"
+minifb = "0.17"
 structopt = "0.3.0"
 crossbeam-channel = "0.4.0"
 display = { path = "../lib", features = ["customer-mlz"] }
