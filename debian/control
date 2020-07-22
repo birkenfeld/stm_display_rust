@@ -3,9 +3,11 @@ Section: misc
 Priority: optional
 Maintainer: Georg Brandl <g.brandl@fz-juelich.de>
 Build-Depends: debhelper (>= 11~),
+ pkg-config,
  curl,
  binutils-multiarch,
  libx11-dev,
+ libxkbcommon-dev,
  libxcursor-dev
 Standards-Version: 4.1.4
 
