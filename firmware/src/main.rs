@@ -349,6 +349,7 @@ fn main() -> ! {
                 Action::None => (),
                 Action::Reset => reset(),
                 Action::Bootloader => reset_to_bootloader(bootpin),
+                Action::ResetApu => reset_apu(&mut reset_pin),
                 Action::WriteEeprom(len_addr, data_addr, data) => {
                     let _ = eeprom.write_stored_entry(len_addr, data_addr, data);
                 }
@@ -454,6 +455,15 @@ pub fn reset_to_bootloader<O: OutputPin>(mut pin: O) -> ! {
     let _ = pin.set_high();
     asm::delay(10000);
     SCB::sys_reset();
+}
+
+/// Reset the APU via the connected reset pin
+pub fn reset_apu<P: OutputPin>(reset_pin: &mut P) {
+    let _ = reset_pin.set_low();
+    for _ in 0..50 {
+        asm::delay(1000000);
+    }
+    let _ = reset_pin.set_high();
 }
 
 // Implement the various target specific traits for the STM.

@@ -1,10 +1,9 @@
 //! Implementation of the "special" override mode of the display.
 
-use cortex_m::asm;
 use embedded_hal::digital::v2::OutputPin;
 use display::interface::TouchHandler;
 use display::framebuf::{MEDIUMFONT as FONT, BLACK_ON_WHITE, RED_ON_WHITE};
-use crate::{DisplayState, Console, FrameBuffer, recv_uart, clear_uart};
+use crate::{DisplayState, Console, FrameBuffer, recv_uart, clear_uart, reset_apu};
 
 pub const ACTIVATION: &[u16] = &[1, 1, 2, 2, 0, 3, 0, 3];
 
@@ -82,13 +81,4 @@ fn enter_netinstall(gfx: &mut FrameBuffer, con: &mut Console, wipe: bool) {
     gfx.text(FONT, 20 + 9*8, 80, b"IMG", BLACK_ON_WHITE);
 
     // PXE is booting, back to normal mode to let the user know what's happening
-}
-
-
-fn reset_apu<P: OutputPin>(reset_pin: &mut P) {
-    let _ = reset_pin.set_low();
-    for _ in 0..50 {
-        asm::delay(1000000);
-    }
-    let _ = reset_pin.set_high();
 }
