@@ -17,6 +17,13 @@ height = {0: 8, 1: 16, 2: 40, 3: 120, 4: 16}
 width = {0: 6, 1: 8, 2: 20, 3: 60, 4: 16}
 perline = 480//width[f]
 
-for i in range(0, 128//height[f]):
-    d.set_pos((0, i*height[f]))
-    d.raw_text(bytes(range(i*perline, min(i*perline+perline, 256))))
+if f == 3:
+    d.set_pos((0, 0))
+    d.text('123456789')
+    d.set_pos((0, 64))
+    d.text('.eE%?+-')
+
+else:
+    for i in range(0, 128//height[f]):
+        d.set_pos((0, i*height[f]))
+        d.raw_text(bytes(range(i*perline, min(i*perline+perline, 256))))

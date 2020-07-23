@@ -3,5 +3,5 @@ set -e
 util/generate_font.py "Px437 ATI SmallW 6x8" Regular 8 8 6 0 -1 cp437 lib/src/font_console.rs
 util/generate_font.py Iosevka Bold 16 16 8 0 -3 cp437 lib/src/font_medium.rs
 util/generate_font.py Iosevka Bold 40 40 20 0 -8 ascii lib/src/font_large.rs
-util/generate_font.py "Iosevka Light" Regular 76 76 38 0 -8 "0123456789.-+eE%? " lib/src/font_vlarge.rs
+util/generate_font.py "Iosevka Light" Regular 76 64 38 0 -4 "0123456789.-+eE%? " lib/src/font_vlarge.rs
 util/generate_font.py "Material Icons" Regular 16 16 16 0 0 material lib/src/font_icons.rs
