@@ -136,6 +136,7 @@ fn main() {
 
     let mut mouse_was_down = false;
 
+    let mut iteration = 0u32;
     loop {
         // process quit conditions
         if !win.is_open() {
@@ -151,7 +152,8 @@ fn main() {
             disp.process_byte(ch);
             change = true;
         }
-        if change {
+        iteration = iteration.wrapping_add(1);
+        if change || iteration % 20 == 0 {
             // check which framebuffer to display, and prepare the 32-bit buffer
             let fb = if console_active.get() {
                 disp.console().buf()
@@ -174,7 +176,7 @@ fn main() {
             }
         }
         mouse_was_down = mouse_is_down;
-        // aim for a framerate of 50Hz
-        std::thread::sleep(std::time::Duration::from_millis(20));
+        // aim for a framerate of 20Hz
+        std::thread::sleep(std::time::Duration::from_millis(50));
     }
 }
