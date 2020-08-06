@@ -32,10 +32,11 @@ impl Font {
 
 pub const FONTS: &[Font] = &[
     include!("font_console.rs"),
-    include!("font_medium.rs"),
+    include!("font_normal.rs"),
     include!("font_large.rs"),
     include!("font_vlarge.rs"),
     include!("font_icons.rs"),
+    include!("font_medium.rs"),
 ];
 
 pub const CONSOLEFONT: &Font = &FONTS[0];

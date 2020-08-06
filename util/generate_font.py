@@ -73,6 +73,7 @@ except Exception:
     print()
     print('charset is either "ascii", "cp437" or a string of ASCII chars')
     sys.exit(1)
+print(f'generating for {family} size {size}')
 
 # Determine the glyphs to be rendered.
 
