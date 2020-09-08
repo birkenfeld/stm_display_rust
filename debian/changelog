@@ -1,3 +1,10 @@
+display-firmware (1.16.0) bionic; urgency=medium
+
+  * add 'x_|' to verylarge font
+  * change size of medium font to 12x24
+
+ -- Enrico Faulhaber <jenkins@jenkinsng.admin.frm2.tum.de>  Tue, 08 Sep 2020 10:45:52 +0200
+
 display-firmware (1.15.0) unstable; urgency=medium
 
   [ Georg Brandl ]
