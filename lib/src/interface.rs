@@ -146,7 +146,7 @@ impl<'buf, Tx: WriteToHost, Th: TouchHandler, Fb: FbImpl> DisplayState<'buf, Tx,
                 };
             }
             Escape::Console(ref mut pos) => {
-                if (ch >= b'0' && ch <= b'9') || ch == b';' {
+                if (ch >= b'0' && ch <= b'9') || ch == b';' || ch == b'?' {
                     self.escape_seq[*pos] = ch;
                     *pos += 1;
                     if *pos == self.escape_seq.len() {

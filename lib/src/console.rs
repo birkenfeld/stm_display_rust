@@ -71,10 +71,12 @@ impl<'buf, Tx: WriteToHost, Fb: FbImpl> Console<'buf, Tx, Fb> {
 
     pub fn process_char(&mut self, ch: u8) {
         match ch {
+            // Carriage return
             b'\r' => {
                 self.cx = 0;
             },
-            b'\n' => {
+            // Linefeed
+            b'\n' | b'\x0b' | b'\x0c' => {
                 self.cx = 0;
                 self.cy += 1;
                 if self.cy == ROWS {
@@ -82,11 +84,20 @@ impl<'buf, Tx: WriteToHost, Fb: FbImpl> Console<'buf, Tx, Fb> {
                     self.cy -= 1;
                 }
             },
+            // Backspace
             b'\x08' => if self.cx > 0 {
                 self.cx -= 1;
-                self.fb.text(CONSOLEFONT, self.cx * CHARW, self.cy * CHARH,
-                             b" ", &self.color);
             },
+            // Tab
+            b'\x09' => {
+                self.cx = (self.cx + 8) / 8;
+                if self.cx >= COLS {
+                    self.process_char(b'\n');
+                }
+            }
+            // Ignored control characters
+            b'\x00' | b'\x07' | b'\x0e' | b'\x0f' => (),
+            // Any other character is echoed literally.
             _ => {
                 self.fb.text(CONSOLEFONT, self.cx * CHARW, self.cy * CHARH,
                              &[ch], &self.color);
@@ -115,39 +126,83 @@ impl<'buf, Tx: WriteToHost, Fb: FbImpl> Console<'buf, Tx, Fb> {
                     _ => {}
                 }
             },
-            b'H' | b'f' => {
+            b'H' | b'f' => {  // position cursor
                 let y = args.next().unwrap_or(1);
                 let x = args.next().unwrap_or(1);
                 self.cx = if x > 0 { x-1 } else { 0 };
                 self.cy = if y > 0 { y-1 } else { 0 };
-            },
-            b'A' => {
+            }
+            b'A' => {  // move cursor up
                 let n = args.next().unwrap_or(1).max(1);
                 self.cy -= n.min(self.cy);
-            },
-            b'B' => {
+            }
+            b'B' => {  // move cursor down
                 let n = args.next().unwrap_or(1).max(1);
                 self.cy += n.min(ROWS - self.cy - 1);
-            },
-            b'C' => {
+            }
+            b'C' => {  // move cursor right
                 let n = args.next().unwrap_or(1).max(1);
                 self.cx += n.min(COLS - self.cx - 1);
-            },
-            b'D' => {
+            }
+            b'D' => {  // move cursor left
                 let n = args.next().unwrap_or(1).max(1);
                 self.cx -= n.min(self.cx);
-            },
-            b'G' => {
+            }
+            b'G' => {  // move cursor to given column
                 let x = args.next().unwrap_or(1).max(1);
                 self.cx = x-1;
             }
-            b'J' => {
-                // TODO: process arguments
-                self.fb.clear(0);
-                self.cx = 0;
-                self.cy = 0;
+            b'J' => {  // erase screen
+                let arg = args.next().unwrap_or(0);
+                let (px, py) = (self.cx * CHARW, self.cy * CHARH);
+                if arg == 0 {  // from cursor
+                    self.fb.rect(px, py, WIDTH - 1, py + CHARH - 1, 0);
+                    if self.cy < ROWS - 1 {
+                        self.fb.rect(0, py + CHARH, WIDTH - 1, HEIGHT - 1, 0);
+                    }
+                } else if arg == 1 {  // to cursor
+                    self.fb.rect(0, py, px + CHARW - 1, py + CHARH - 1, 0);
+                    if self.cy > 0 {
+                        self.fb.rect(0, 0, WIDTH - 1, py - 1, 0);
+                    }
+                } else {  // entire screen
+                    self.fb.clear(0);
+                }
+            }
+            b'K' => {  // erase line
+                let arg = args.next().unwrap_or(0);
+                let (px, py) = (self.cx * CHARW, self.cy * CHARH);
+                if arg == 0 {  // from cursor
+                    self.fb.rect(px, py, WIDTH - 1, py + CHARH - 1, 0);
+                } else if arg == 1 {  // to cursor
+                    self.fb.rect(0, py, px + CHARW - 1, py + CHARH - 1, 0);
+                } else {  // entire line
+                    self.fb.rect(0, py, WIDTH - 1, py + CHARH - 1, 0);
+                }
             },
-            b'K' => {}, // TODO: erase line
+            b'L' => {  // insert some lines
+                let _n = args.next().unwrap_or(1).max(1);
+                // TODO implement this
+            }
+            b'M' => {  // delete some lines
+                let n = args.next().unwrap_or(1).max(1).min(ROWS - self.cy);
+                let py = self.cy * CHARH;
+                if self.cy < ROWS - 1 {
+                    self.fb.copy_rect(0, py + CHARH, WIDTH - 1, HEIGHT - 1, 0, py);
+                }
+                self.fb.rect(0, HEIGHT - n*CHARH, WIDTH - 1, HEIGHT - 1, 0);
+            }
+            b'P' => {  // delete some chars
+                let n = args.next().unwrap_or(1).max(1).min(COLS - self.cx);
+                let (px, py) = (self.cx * CHARW, self.cy * CHARH);
+                self.fb.copy_rect(px + n*CHARW, py, WIDTH - 1, py + CHARH - 1, px, py);
+                self.fb.rect(WIDTH - n*CHARW, py, WIDTH - 1, py + CHARH - 1, 0);
+            }
+            b'X' => {  // erase some chars
+                let n = args.next().unwrap_or(1).max(1).min(COLS - self.cx);
+                let (px, py) = (self.cx * CHARW, self.cy * CHARH);
+                self.fb.rect(px, py, px + n*CHARW - 1, py + CHARH - 1, 0);
+            }
             // otherwise, ignore
             _    => {}
         }
