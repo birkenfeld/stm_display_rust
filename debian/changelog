@@ -1,3 +1,9 @@
+display-firmware (1.17.0) bionic; urgency=medium
+
+  * Implement some more console features
+
+ -- Georg Brandl <jenkins@jenkinsng.admin.frm2.tum.de>  Mon, 14 Sep 2020 08:59:10 +0200
+
 display-firmware (1.16.0) bionic; urgency=medium
 
   * add 'x_|' to verylarge font
