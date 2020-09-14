@@ -1,3 +1,9 @@
+display-firmware (1.18.0) bionic; urgency=medium
+
+  * Implement even more escape sequences
+
+ -- Georg Brandl <jenkins@jenkinsng.admin.frm2.tum.de>  Mon, 14 Sep 2020 14:13:46 +0200
+
 display-firmware (1.17.0) bionic; urgency=medium
 
   * Implement some more console features
