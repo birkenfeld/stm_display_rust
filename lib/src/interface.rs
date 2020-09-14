@@ -83,7 +83,7 @@ pub enum Action<'a> {
 enum Escape {
     None,
     SawOne,
-    Console(usize),
+    CSI(usize),
     Graphics(usize, usize),
     MayBeBooting(usize),
 }
@@ -137,15 +137,17 @@ impl<'buf, Tx: WriteToHost, Th: TouchHandler, Fb: FbImpl> DisplayState<'buf, Tx,
                 }
             }
             Escape::SawOne => {
-                self.escape = if ch == b'[' {
-                    Escape::Console(0)
-                } else if ch == ESCAPE {
-                    Escape::Graphics(0, 0)
-                } else {
-                    Escape::None
+                self.escape = match ch {
+                    ESCAPE => Escape::Graphics(0, 0),
+                    b'[' => Escape::CSI(0),
+                    b'M' => {  // reverse linefeed = insert one line
+                        self.con.process_csi(b'L', b"1");
+                        Escape::None
+                    }
+                    _ => Escape::None,
                 };
             }
-            Escape::Console(ref mut pos) => {
+            Escape::CSI(ref mut pos) => {
                 if (ch >= b'0' && ch <= b'9') || ch == b';' || ch == b'?' {
                     self.escape_seq[*pos] = ch;
                     *pos += 1;
@@ -153,7 +155,7 @@ impl<'buf, Tx: WriteToHost, Th: TouchHandler, Fb: FbImpl> DisplayState<'buf, Tx,
                         self.escape = Escape::None;
                     }
                 } else {
-                    self.con.process_escape(ch, &self.escape_seq[..*pos]);
+                    self.con.process_csi(ch, &self.escape_seq[..*pos]);
                     if ch == b'J' {
                         // Check if we're getting SeaBIOS...
                         self.escape = Escape::MayBeBooting(0);
@@ -182,10 +184,14 @@ impl<'buf, Tx: WriteToHost, Th: TouchHandler, Fb: FbImpl> DisplayState<'buf, Tx,
             }
             Escape::MayBeBooting(ref mut pos) => {
                 *pos += 1;
-                if ch != BOOT_STRING[*pos - 1] {
+                let p = *pos;
+                if ch != BOOT_STRING[p - 1] {
                     self.escape = Escape::None;
+                    for i in 0..p-1 {
+                        self.process_byte(BOOT_STRING[i]);
+                    }
                     return self.process_byte(ch);
-                } else if *pos == BOOT_STRING.len() {
+                } else if p == BOOT_STRING.len() {
                     // We are booting! Reset the display.
                     self.escape = Escape::None;
                     return Action::Reset;

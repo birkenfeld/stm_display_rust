@@ -24,6 +24,7 @@ pub struct Console<'buf, Tx, Fb> {
     color: Colors,
     cx: u16,
     cy: u16,
+    need_wrap: bool,
     pos_cursor: fn(u16, u16),
 }
 
@@ -31,8 +32,8 @@ impl<'buf, Tx: WriteToHost, Fb: FbImpl> Console<'buf, Tx, Fb> {
     pub fn new(mut fb: FrameBuffer<'buf, Fb>, tx: Tx, pos_cursor: fn(u16, u16)) -> Self {
         fb.clear(0);
         fb.clear_scroll_area(0);
-        Self { fb, tx, color: [DEFAULT_BKGRD, 0, 0, DEFAULT_COLOR], cx: 0, cy: 0,
-               pos_cursor }
+        Self { fb, tx, color: [DEFAULT_BKGRD, 0, 0, DEFAULT_COLOR],
+               cx: 0, cy: 0, need_wrap: false, pos_cursor }
     }
 
     pub fn write_to_host(&mut self, bytes: &[u8]) {
@@ -74,6 +75,7 @@ impl<'buf, Tx: WriteToHost, Fb: FbImpl> Console<'buf, Tx, Fb> {
             // Carriage return
             b'\r' => {
                 self.cx = 0;
+                self.need_wrap = false;
             },
             // Linefeed
             b'\n' | b'\x0b' | b'\x0c' => {
@@ -83,34 +85,40 @@ impl<'buf, Tx: WriteToHost, Fb: FbImpl> Console<'buf, Tx, Fb> {
                     self.fb.scroll_up(CHARH);
                     self.cy -= 1;
                 }
+                self.need_wrap = false;
             },
             // Backspace
-            b'\x08' => if self.cx > 0 {
+            b'\x08' => if self.cx > 0 && !self.need_wrap {
                 self.cx -= 1;
             },
             // Tab
             b'\x09' => {
-                self.cx = (self.cx + 8) / 8;
+                self.cx = (self.cx & !0b111) + 8;
                 if self.cx >= COLS {
-                    self.process_char(b'\n');
+                    self.cx = COLS - 1;
+                    self.need_wrap = true;
                 }
             }
             // Ignored control characters
             b'\x00' | b'\x07' | b'\x0e' | b'\x0f' => (),
             // Any other character is echoed literally.
             _ => {
+                if self.need_wrap {
+                    self.process_char(b'\n');
+                }
                 self.fb.text(CONSOLEFONT, self.cx * CHARW, self.cy * CHARH,
                              &[ch], &self.color);
-                self.cx += 1;
-                if self.cx >= COLS {
-                    self.process_char(b'\n');
+                if self.cx < COLS - 1 {
+                    self.cx += 1;
+                } else {
+                    self.need_wrap = true;
                 }
             }
         }
         (self.pos_cursor)(self.cx, self.cy);
     }
 
-    pub fn process_escape(&mut self, end: u8, seq: &[u8]) {
+    pub fn process_csi(&mut self, end: u8, seq: &[u8]) {
         let mut args = seq.split(|&v| v == b';').map(|n| btoi(n).unwrap_or(0));
         match end {
             b'm' => while let Some(arg) = args.next() {
@@ -118,6 +126,7 @@ impl<'buf, Tx: WriteToHost, Fb: FbImpl> Console<'buf, Tx, Fb> {
                     0  => { self.color[3] = DEFAULT_COLOR; self.color[0] = DEFAULT_BKGRD; }
                     // XXX should not get reset by color selection
                     1  => { self.color[3] |= 0b1000; } // XXX: only for 16colors
+                    7  => { self.color.swap(0, 3); }
                     22 => { self.color[3] &= !0b1000; }
                     30..=37 => { self.color[3] = arg as u8 - 30; }
                     40..=47 => { self.color[0] = arg as u8 - 40; }
@@ -127,30 +136,41 @@ impl<'buf, Tx: WriteToHost, Fb: FbImpl> Console<'buf, Tx, Fb> {
                 }
             },
             b'H' | b'f' => {  // position cursor
-                let y = args.next().unwrap_or(1);
-                let x = args.next().unwrap_or(1);
+                let y = args.next().unwrap_or(1).min(ROWS);
+                let x = args.next().unwrap_or(1).min(COLS);
                 self.cx = if x > 0 { x-1 } else { 0 };
                 self.cy = if y > 0 { y-1 } else { 0 };
+                self.need_wrap = false;
+            }
+            b'G' | b'`' => {  // move cursor to given column
+                let x = args.next().unwrap_or(1).max(1).min(COLS);
+                self.cx = x-1;
+                self.need_wrap = false;
+            }
+            b'd' => {  // move cursor to given row
+                let y = args.next().unwrap_or(1).max(1).min(ROWS);
+                self.cy = y-1;
+                self.need_wrap = false;
             }
             b'A' => {  // move cursor up
                 let n = args.next().unwrap_or(1).max(1);
                 self.cy -= n.min(self.cy);
+                self.need_wrap = false;
             }
-            b'B' => {  // move cursor down
+            b'B' | b'e' => {  // move cursor down
                 let n = args.next().unwrap_or(1).max(1);
                 self.cy += n.min(ROWS - self.cy - 1);
+                self.need_wrap = false;
             }
-            b'C' => {  // move cursor right
+            b'C' | b'a' => {  // move cursor right
                 let n = args.next().unwrap_or(1).max(1);
                 self.cx += n.min(COLS - self.cx - 1);
+                self.need_wrap = false;
             }
             b'D' => {  // move cursor left
                 let n = args.next().unwrap_or(1).max(1);
                 self.cx -= n.min(self.cx);
-            }
-            b'G' => {  // move cursor to given column
-                let x = args.next().unwrap_or(1).max(1);
-                self.cx = x-1;
+                self.need_wrap = false;
             }
             b'J' => {  // erase screen
                 let arg = args.next().unwrap_or(0);
@@ -181,8 +201,15 @@ impl<'buf, Tx: WriteToHost, Fb: FbImpl> Console<'buf, Tx, Fb> {
                 }
             },
             b'L' => {  // insert some lines
-                let _n = args.next().unwrap_or(1).max(1);
-                // TODO implement this
+                let n = args.next().unwrap_or(1).max(1).min(ROWS - self.cy);
+                let py = self.cy * CHARH;
+                if self.cy < ROWS - n {
+                    for i in (0..ROWS - n - self.cy).rev() {
+                        self.fb.copy_rect(0, py + i*CHARH, WIDTH - 1, py + (i + 1)*CHARH - 1,
+                                          0, py + (i + n)*CHARH);
+                    }
+                }
+                self.fb.rect(0, py, WIDTH - 1, py + n*CHARH - 1, 0);
             }
             b'M' => {  // delete some lines
                 let n = args.next().unwrap_or(1).max(1).min(ROWS - self.cy);
@@ -202,6 +229,10 @@ impl<'buf, Tx: WriteToHost, Fb: FbImpl> Console<'buf, Tx, Fb> {
                 let n = args.next().unwrap_or(1).max(1).min(COLS - self.cx);
                 let (px, py) = (self.cx * CHARW, self.cy * CHARH);
                 self.fb.rect(px, py, px + n*CHARW - 1, py + CHARH - 1, 0);
+            }
+            b'@' => {  // insert some blanks
+                let _n = args.next().unwrap_or(1).max(1);
+                // TODO implement this
             }
             // otherwise, ignore
             _    => {}
