@@ -285,11 +285,49 @@ impl<'buf, Tx: WriteToHost, Th: TouchHandler, Fb: FbImpl> DisplayState<'buf, Tx,
                 self.gfx.copy_rect(pos1.0, pos1.1, pos2.0, pos2.1, pos3.0, pos3.1);
             }
             CMD_PLOT => if data_len >= 3 {
-                let (mut x, mut y0) = pos_from_bytes(&cmd[2..]);
-                for &y1 in &cmd[4..] {
-                    self.gfx.line(x, y0, x+1, y1 as u16, self.cur.color[3]);
+                // Extended plot command that can handle a range of y values for
+                // each x value.  There can be 1, 2, or 4 y values per data
+                // point, encoded vaguely similar to UTF-8 where the highest bit
+                // (unused otherwise) indicates continuation.
+                let (mut x, _) = pos_from_bytes(&cmd[2..]);
+                let mut y_coords = cmd[4..].iter().map(|v| *v as u16);
+                let mut ylast = None;
+                while let Some(mut ystart) = y_coords.next() {
+                    if ystart & 0x80 == 0 {
+                        // single coordinate for this point
+                        if let Some(y0) = ylast {
+                            self.gfx.line(x-1, y0, x, ystart, self.cur.color[3]);
+                        } else {
+                            self.gfx.line(x, ystart, x, ystart, self.cur.color[3]);
+                        }
+                        ylast = Some(ystart);
+                    } else {
+                        ystart &= 0x7f;
+                        let yend = y_coords.next().unwrap_or(0);
+                        if yend & 0x80 == 0 {
+                            // two coordinates: start/end, are also min/max
+                            if ystart == yend {
+                                // special case: no data for this point
+                                ylast = None;
+                            } else {
+                                if let Some(y0) = ylast {
+                                    self.gfx.line(x-1, y0, x, ystart, self.cur.color[3]);
+                                }
+                                self.gfx.line(x, ystart, x, yend, self.cur.color[3]);
+                                ylast = Some(yend);
+                            }
+                        } else {
+                            // four coordinates: start/end/min/max
+                            let ymin = y_coords.next().unwrap_or(0);
+                            let ymax = y_coords.next().unwrap_or(0);
+                            if let Some(y0) = ylast {
+                                self.gfx.line(x-1, y0, x, ystart, self.cur.color[3]);
+                            }
+                            self.gfx.line(x, ymin, x, ymax, self.cur.color[3]);
+                            ylast = Some(yend);
+                        }
+                    }
                     x += 1;
-                    y0 = y1 as u16;
                 }
             }
             CMD_SEL_ATTRS ..= CMD_SEL_ATTRS_MAX => {
