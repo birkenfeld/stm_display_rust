@@ -1,13 +1,13 @@
 Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
-Upstream-Name: cachereg
-Source: http://forge.frm2.tum.de/review/frm2/general/cachereg
+Upstream-Name: display_firmware
+Source: https://forge.frm2.tum.de/review/mlz/controlbox/display_firmware
 
 Files: *
-Copyright: 2018-2019 Georg Brandl <g.brandl@fz-juelich.de>
+Copyright: 2018-2020 Georg Brandl <g.brandl@fz-juelich.de>
 License: GPL-3.0+
 
 Files: debian/*
-Copyright: 2018-2019 Georg Brandl <g.brandl@fz-juelich.de>
+Copyright: 2018-2020 Georg Brandl <g.brandl@fz-juelich.de>
 License: GPL-3.0+
 
 License: GPL-3.0+
