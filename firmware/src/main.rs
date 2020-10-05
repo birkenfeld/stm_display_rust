@@ -7,7 +7,6 @@ use stm32f4::stm32f429 as stm;
 use stm::interrupt;
 use cortex_m::{asm, interrupt as interrupts, peripheral::{NVIC, SCB}};
 use cortex_m_rt::ExceptionFrame;
-// TODO: make sure queues are not mutably aliased
 use heapless::spsc::{SingleCore, Queue};
 use heapless::consts::*;
 use hal::time::*;
@@ -34,6 +33,8 @@ use display::{WIDTH, HEIGHT, CHARW, CHARH};
 type DisplayState = display::interface::DisplayState<'static, WriteToHost, TouchHandler, FbImpl>;
 type Console = display::console::Console<'static, WriteToHost, FbImpl>;
 type FrameBuffer = display::framebuf::FrameBuffer<'static, FbImpl>;
+
+const TEST_MODE: bool = cfg!(feature = "test-mode");
 
 /// Horizontal display timing.
 const H_SYNCPULSE:  u16 = 11;
@@ -315,7 +316,18 @@ fn main() -> ! {
     let mut touch = unsafe { TOUCH_EVT.split().1 };
 
     #[cfg(feature="test-mode")]
-    test_mode::run(&mut disp, &mut spi_flash, &mut eeprom);
+    {
+        use display::{VER_MAJOR, VER_MINOR};
+        // When the test mode is exited, it writes the current firmware
+        // version to a special address in the EEPROM.  If this is already
+        // present, the test mode is not entered again for this version.
+        let mut data_buf = [0; 2];
+        let last = eeprom.read_stored_entry(2, 320, &mut data_buf);
+        if last != Ok(&[VER_MAJOR, VER_MINOR]) {
+            test_mode::run(&mut disp, &mut spi_flash, &mut eeprom);
+            let _ = eeprom.write_stored_entry(2, 320, &[VER_MAJOR, VER_MINOR]);
+        }
+    }
 
     // Switch to console if nothing else programmed
     disp.console().activate();

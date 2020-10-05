@@ -51,8 +51,8 @@ const MODE: u8 = 1;
 /// - 1.7: several fixes in firmware test mode
 /// - 1.8: fix interference of startup instructions and uart
 /// - 1.9: update of reinstall PXE host name
-const VER_MAJOR: u8 = pkg_version_major!();
-const VER_MINOR: u8 = pkg_version_minor!();
+pub const VER_MAJOR: u8 = pkg_version_major!();
+pub const VER_MINOR: u8 = pkg_version_minor!();
 
 /// Identify the firmware: magic number, followed by the reply to
 /// the IDENT command (4 bytes with customer, mode, version).

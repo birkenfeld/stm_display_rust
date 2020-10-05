@@ -3,7 +3,8 @@
 use embedded_hal::digital::v2::OutputPin;
 use display::interface::TouchHandler;
 use display::framebuf::{MEDIUMFONT as FONT, BLACK_ON_WHITE, RED_ON_WHITE};
-use crate::{DisplayState, Console, FrameBuffer, recv_uart, clear_uart, reset_apu};
+use crate::{DisplayState, Console, FrameBuffer, recv_uart, clear_uart, reset_apu,
+            TEST_MODE};
 
 pub const ACTIVATION: &[u16] = &[1, 1, 2, 2, 0, 3, 0, 3];
 
@@ -51,13 +52,15 @@ pub fn run<P: OutputPin>(disp: &mut DisplayState, reset_pin: &mut P) {
 fn respond_to_prompt(con: &mut Console, prompt: &[u8], reply: impl IntoIterator<Item=&'static u8>) {
     let mut uart_ring = wheelbuf::WheelBuf::new([0u8; 8]);
     loop {
-        let _ = uart_ring.push(recv_uart());
+        let ch = recv_uart();
+        con.process_char(ch);
+        let _ = uart_ring.push(ch);
         if uart_ring.iter().eq(prompt) {
             // firmware keyboard buffer is only ~15 chars, need to send single
             // chars and wait for the echo back...
             for &ch in reply {
                 con.write_to_host(&[ch]);
-                recv_uart();
+                con.process_char(recv_uart());
             }
             return;
         }
@@ -66,6 +69,10 @@ fn respond_to_prompt(con: &mut Console, prompt: &[u8], reply: impl IntoIterator<
 
 
 fn enter_netinstall(gfx: &mut FrameBuffer, con: &mut Console, wipe: bool) {
+    if TEST_MODE {
+        // let us see directly what's going on
+        con.activate();
+    }
     gfx.clear(15);
     gfx.text(FONT, 20, 30, b"Rebooting for reinstall...", RED_ON_WHITE);
 
