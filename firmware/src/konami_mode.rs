@@ -49,11 +49,17 @@ pub fn run<P: OutputPin>(disp: &mut DisplayState, reset_pin: &mut P) {
 }
 
 
-fn respond_to_prompt(con: &mut Console, prompt: &[u8], reply: impl IntoIterator<Item=&'static u8>) {
+fn respond_to_prompt(con: &mut Console, prompt: &[u8], outbuf: &mut [u8],
+                     reply: impl IntoIterator<Item=&'static u8>) {
+    let mut i = 0;
     let mut uart_ring = wheelbuf::WheelBuf::new([0u8; 8]);
     loop {
         let ch = recv_uart();
         con.process_char(ch);
+        if i < outbuf.len() {
+            outbuf[i] = ch;
+            i += 1;
+        }
         let _ = uart_ring.push(ch);
         if uart_ring.iter().eq(prompt) {
             // firmware keyboard buffer is only ~15 chars, need to send single
@@ -74,18 +80,22 @@ fn enter_netinstall(gfx: &mut FrameBuffer, con: &mut Console, wipe: bool) {
         con.activate();
     }
     gfx.clear(15);
-    gfx.text(FONT, 20, 30, b"Rebooting for reinstall...", RED_ON_WHITE);
+    gfx.text(FONT, 20, 25, b"Rebooting for reinstall...", RED_ON_WHITE);
 
-    respond_to_prompt(con, b"PXE boot", b"N");
-    gfx.text(FONT, 20, 80, b"PXE", BLACK_ON_WHITE);
-    respond_to_prompt(con, b"autoboot", b"\x1b[A\n");
-    respond_to_prompt(con, b"2JiPXE> ", b"ifconf -c dhcp net0\n");
-    gfx.text(FONT, 20 + 4*8, 80, b"DHCP", BLACK_ON_WHITE);
+    respond_to_prompt(con, b"PXE boot", &mut [], b"N");
+    gfx.text(FONT, 20, 85, b"PXE", BLACK_ON_WHITE);
+    respond_to_prompt(con, b"autoboot", &mut [], b"\x1b[A\n");
+    respond_to_prompt(con, b"2JiPXE> ", &mut [], b"ifstat net0\n");
+    let mut outbuf = [0; 24];
+    respond_to_prompt(con, b"\r\niPXE> ", &mut outbuf, b"ifconf -c dhcp net0\n");
+    gfx.text(FONT, 20, 55, &outbuf[1..], BLACK_ON_WHITE);
+    gfx.text(FONT, 20 + 4*8, 85, b"DHCP", BLACK_ON_WHITE);
+
     // TODO: respond to "No configuration methods succeeded" with dhcp again
-    respond_to_prompt(con, b"..... ok", b"imgexec ".iter().chain(
+    respond_to_prompt(con, b"..... ok", &mut [], b"imgexec ".iter().chain(
         if wipe { PXE_SCRIPT_WIPE } else { PXE_SCRIPT }
     ).chain(b"\n"));
-    gfx.text(FONT, 20 + 9*8, 80, b"IMG", BLACK_ON_WHITE);
+    gfx.text(FONT, 20 + 9*8, 85, b"IMG", BLACK_ON_WHITE);
 
     // PXE is booting, back to normal mode to let the user know what's happening
 }
