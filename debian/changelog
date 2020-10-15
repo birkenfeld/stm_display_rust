@@ -1,3 +1,14 @@
+display-firmware (1.19.0) bionic; urgency=medium
+
+  * dependency updates
+  * fix build failure on ARM
+  * implement new plot command that can take multiple y values per point
+  * fix debian copyright file
+  * run test mode only once per version
+  * reinstall: display net0 mac address
+
+ -- Georg Brandl <jenkins@jenkinsng.admin.frm2.tum.de>  Thu, 15 Oct 2020 16:14:53 +0200
+
 display-firmware (1.18.0) bionic; urgency=medium
 
   * Implement even more escape sequences
