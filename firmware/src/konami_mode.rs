@@ -12,26 +12,31 @@ const PXE_SCRIPT: &[u8] = b"http://pxe.boxes.frm2.tum.de/box.pxe";
 const PXE_SCRIPT_WIPE: &[u8] = b"http://pxe.boxes.frm2.tum.de/box_wipe.pxe";
 
 
-pub fn run<P: OutputPin>(disp: &mut DisplayState, reset_pin: &mut P) {
+pub fn run<P: OutputPin>(disp: &mut DisplayState, reset_pin: &mut P, preset_opt: Option<u16>) {
     let mut was_gfx = disp.is_graphics();
     let (gfx, con, touch) = disp.split();
 
     gfx.activate();
     gfx.clear(15);
 
-    gfx.rect_outline(8, 8, 116, 120, 0);
-    gfx.text(FONT, 20, 56, b"Reset APU", BLACK_ON_WHITE);
-    gfx.rect_outline(124, 8, 236, 120, 0);
-    gfx.text(FONT, 140, 56, b"Reinstall", RED_ON_WHITE);
-    gfx.rect_outline(244, 8, 356, 120, 0);
-    gfx.text(FONT, 260, 56, b"Wipe and", RED_ON_WHITE);
-    gfx.text(FONT, 260, 70, b"reinstall", RED_ON_WHITE);
-    gfx.rect_outline(364, 8, 472, 120, 0);
-    gfx.text(FONT, 380, 56, b"Cancel", BLACK_ON_WHITE);
+    let x = if let Some(opt) = preset_opt {
+        opt*120 + 10
+    } else {
+        gfx.rect_outline(8, 8, 116, 120, 0);
+        gfx.text(FONT, 20, 56, b"Reset APU", BLACK_ON_WHITE);
+        gfx.rect_outline(124, 8, 236, 120, 0);
+        gfx.text(FONT, 140, 56, b"Reinstall", RED_ON_WHITE);
+        gfx.rect_outline(244, 8, 356, 120, 0);
+        gfx.text(FONT, 260, 56, b"Wipe and", RED_ON_WHITE);
+        gfx.text(FONT, 260, 70, b"reinstall", RED_ON_WHITE);
+        gfx.rect_outline(364, 8, 472, 120, 0);
+        gfx.text(FONT, 380, 56, b"Cancel", BLACK_ON_WHITE);
 
-    let x = touch.wait().0;
-    // discard anything the APU sent while the menu was displayed
-    clear_uart();
+        let x = touch.wait().0;
+        // discard anything the APU sent while the menu was displayed
+        clear_uart();
+        x
+    };
 
     if x < 360 {
         was_gfx = false;  // always start with console on reset

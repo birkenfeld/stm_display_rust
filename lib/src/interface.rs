@@ -37,6 +37,7 @@ const CMD_RESET:         u8 = 0xf1;
 const CMD_SET_STARTUP:   u8 = 0xf2;
 const CMD_IDENT:         u8 = 0xf3;
 const CMD_RESET_APU:     u8 = 0xf4;
+const CMD_APU_REINSTALL: u8 = 0xf5;
 
 const BOOT_STRING:    &[u8] = b"\x1b[0mSeaBIOS ";
 
@@ -77,6 +78,7 @@ pub enum Action<'a> {
     Reset,
     Bootloader,
     ResetApu,
+    ApuReinstall,
     WriteEeprom(usize, usize, &'a [u8])
 }
 
@@ -350,6 +352,11 @@ impl<'buf, Tx: WriteToHost, Th: TouchHandler, Fb: FbImpl> DisplayState<'buf, Tx,
             CMD_RESET_APU => if data_len >= 4 {
                 if &cmd[2..6] == &crate::FW_IDENT[..4] {
                     return Action::ResetApu;
+                }
+            },
+            CMD_APU_REINSTALL => if data_len >= 4 {
+                if &cmd[2..6] == &crate::FW_IDENT[..4] {
+                    return Action::ApuReinstall;
                 }
             },
             CMD_SET_STARTUP => {

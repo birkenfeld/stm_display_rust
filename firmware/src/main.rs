@@ -353,7 +353,7 @@ fn main() -> ! {
             let (x, _) = disp.process_touch(ev);
             touch_ring.push(x / 120);
             if touch_ring.iter().eq(konami_mode::ACTIVATION) {
-                konami_mode::run(&mut disp, &mut reset_pin);
+                konami_mode::run(&mut disp, &mut reset_pin, None);
             }
         }
         if let Some(ch) = uart.dequeue() {
@@ -362,6 +362,7 @@ fn main() -> ! {
                 Action::Reset => reset(),
                 Action::Bootloader => reset_to_bootloader(bootpin),
                 Action::ResetApu => reset_apu(&mut reset_pin),
+                Action::ApuReinstall => konami_mode::run(&mut disp, &mut reset_pin, Some(2)),
                 Action::WriteEeprom(len_addr, data_addr, data) => {
                     let _ = eeprom.write_stored_entry(len_addr, data_addr, data);
                 }
