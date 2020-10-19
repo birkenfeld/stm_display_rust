@@ -1,3 +1,9 @@
+display-firmware (1.20.0) bionic; urgency=medium
+
+  * implement command to reinstall APU
+
+ -- Georg Brandl <jenkins@jenkinsng.admin.frm2.tum.de>  Mon, 19 Oct 2020 17:11:36 +0200
+
 display-firmware (1.19.0) bionic; urgency=medium
 
   * dependency updates
