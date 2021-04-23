@@ -13,3 +13,7 @@ build:
 
 install: build
 	install -m 644 -Dt $(DESTDIR)/usr/share/display *.bin
+
+psi:
+	$(CARGO) build --release --no-default-features --features customer-psi
+	$(OBJCOPY) -Obinary $(ELF) display_fw_psi.bin
