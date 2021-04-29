@@ -2,7 +2,7 @@
 
 use pkg_version::*;
 
-mod icon;
+mod image;
 pub mod interface;
 pub mod framebuf;
 pub mod console;

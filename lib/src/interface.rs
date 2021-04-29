@@ -1,6 +1,6 @@
 //! The command interface to a client.
 
-use crate::icon::ICONS;
+use crate::image::IMAGES;
 use crate::console::{Console, WriteToHost};
 use crate::framebuf::{FONTS, FrameBuffer, FbImpl};
 
@@ -17,7 +17,7 @@ const CMD_SET_CLIP:      u8 = 0x33;
 const CMD_CLEAR:         u8 = 0x40;
 const CMD_LINES:         u8 = 0x41;
 const CMD_RECT:          u8 = 0x42;
-const CMD_ICON:          u8 = 0x43;
+const CMD_IMAGE:         u8 = 0x43;
 const CMD_TEXT:          u8 = 0x44;
 const CMD_COPYRECT:      u8 = 0x45;
 const CMD_PLOT:          u8 = 0x46;
@@ -271,7 +271,7 @@ impl<'buf, Tx: WriteToHost, Th: TouchHandler, Fb: FbImpl> DisplayState<'buf, Tx,
                 let pos2 = pos_from_bytes(&cmd[4..]);
                 self.gfx.rect(pos1.0, pos1.1, pos2.0, pos2.1, self.cur.color[3]);
             }
-            CMD_ICON => if data_len >= 1 {
+            CMD_IMAGE => if data_len >= 1 {
                 if cmd[2] < IMAGES.len() as u8 {
                     let (data, size, default_color) = IMAGES[cmd[2] as usize];
                     let color = if data_len >= 5 {

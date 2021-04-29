@@ -14,7 +14,7 @@ CMD_SET_CLIP = 0x33
 CMD_CLEAR = 0x40
 CMD_LINES = 0x41
 CMD_RECT = 0x42
-CMD_ICON = 0x43
+CMD_IMAGE = 0x43
 CMD_TEXT = 0x44
 CMD_COPYRECT = 0x45
 CMD_PLOT = 0x46
@@ -166,8 +166,8 @@ class Display:
         self.send(CMD_COPYRECT, self._pos(xy1) + self._pos(xy2) +
                   self._pos(dxy))
 
-    def icon(self, i, colors=None):
+    def image(self, i, colors=None):
         if colors:
             self.send(CMD_IMAGE, bytes([i] + colors))
         else:
-            self.send(CMD_ICON, bytes([i]))
+            self.send(CMD_IMAGE, bytes([i]))
