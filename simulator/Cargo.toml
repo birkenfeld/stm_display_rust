@@ -11,4 +11,9 @@ nix = "0.18"
 minifb = { version = "0.19", default-features = false, features = ["x11"] }
 structopt = "0.3.0"
 crossbeam-channel = "0.4.0"
-display = { path = "../lib", features = ["customer-mlz"] }
+display = { path = "../lib" }
+
+[features]
+default = ["customer-mlz"]
+customer-mlz = ["display/customer-mlz"]
+customer-psi = ["display/customer-psi"]

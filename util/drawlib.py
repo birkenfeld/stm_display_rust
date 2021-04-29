@@ -166,5 +166,8 @@ class Display:
         self.send(CMD_COPYRECT, self._pos(xy1) + self._pos(xy2) +
                   self._pos(dxy))
 
-    def icon(self, i):
-        self.send(CMD_ICON, bytes([i]))
+    def icon(self, i, colors=None):
+        if colors:
+            self.send(CMD_IMAGE, bytes([i] + colors))
+        else:
+            self.send(CMD_ICON, bytes([i]))

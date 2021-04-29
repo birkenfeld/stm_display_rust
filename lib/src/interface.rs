@@ -272,9 +272,14 @@ impl<'buf, Tx: WriteToHost, Th: TouchHandler, Fb: FbImpl> DisplayState<'buf, Tx,
                 self.gfx.rect(pos1.0, pos1.1, pos2.0, pos2.1, self.cur.color[3]);
             }
             CMD_ICON => if data_len >= 1 {
-                if cmd[2] < ICONS.len() as u8 {
-                    let (data, size) = ICONS[cmd[2] as usize];
-                    self.gfx.image(self.cur.posx, self.cur.posy, data, size, &self.cur.color);
+                if cmd[2] < IMAGES.len() as u8 {
+                    let (data, size, default_color) = IMAGES[cmd[2] as usize];
+                    let color = if data_len >= 5 {
+                        [cmd[3], cmd[4], cmd[5], cmd[6]]
+                    } else {
+                        default_color
+                    };
+                    self.gfx.image(self.cur.posx, self.cur.posy, data, size, &color);
                 }
             }
             CMD_CLEAR => if data_len >= 1 {
