@@ -32,9 +32,7 @@ matching your programming adapter (the provided `openocd.cfg` assumes
 ST-Link v2).  Then `cargo run --release` runs GDB, flashes and runs
 the image.  `openocd` should just keep running in the background.
 
-An alternate way is to use the `st-flash` utility, as shown in
-`run-alternate`.  To use this from `cargo run --release`, change the
-runner in `.cargo/config`.
+An alternate way is to use the `st-flash` utility.
 
 ### Simulator
 
