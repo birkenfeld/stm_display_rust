@@ -1,3 +1,19 @@
+display-firmware (1.21.0) focal; urgency=medium
+
+  [ Georg Brandl ]
+  * update jenkins host
+  * add PSI logo and customer ID
+  * add Make target for PSI
+
+  [ Enrico Faulhaber ]
+  * include a default coloring in images
+
+  [ Georg Brandl ]
+  * all: rename "icon" -> "image"
+  * document more, rename Colors to Palette
+
+ -- Georg Brandl <jenkins@jenkins01.admin.frm2.tum.de>  Fri, 30 Apr 2021 11:54:37 +0200
+
 display-firmware (1.20.0) bionic; urgency=medium
 
   * implement command to reinstall APU
