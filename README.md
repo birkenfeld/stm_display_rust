@@ -19,6 +19,12 @@ equipment control computer that shows bootup messages for debugging,
 and then switches to a pretty display of the current status of the
 connected equipment.
 
+### Documentation
+
+Please see the chapter about the firmware in the ControlBox documentation at
+https://forge.frm2.tum.de/public/doc/controlbox/master/html/display/firmware.html 
+
+
 ### Build
 
 Using a recent Rust compiler installed with `rustup`, install the build target
