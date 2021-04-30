@@ -4,6 +4,9 @@ use crate::image::IMAGES;
 use crate::console::{Console, WriteToHost};
 use crate::framebuf::{FONTS, FrameBuffer, FbImpl};
 
+/// A 2-bit color palette. Order is `[bg, .., .., fg]`.
+pub type Palette = [u8; 4];
+
 const ESCAPE:            u8 = 0x1b;
 
 const CMD_MODE_GRAPHICS: u8 = 0x20;
@@ -41,6 +44,7 @@ const CMD_APU_REINSTALL: u8 = 0xf5;
 
 const BOOT_STRING:    &[u8] = b"\x1b[0mSeaBIOS ";
 
+/// All stateful settings for graphics drawing.
 #[derive(Default, Clone, Copy)]
 pub struct GraphicsSetting {
     pub posx:  u16,
@@ -48,7 +52,7 @@ pub struct GraphicsSetting {
     pub clip1: (u16, u16),
     pub clip2: (u16, u16),
     pub font:  u8,
-    pub color: [u8; 4],
+    pub pal:   Palette,
 }
 
 pub trait TouchHandler {
@@ -59,11 +63,16 @@ pub trait TouchHandler {
 }
 
 pub struct DisplayState<'buf, Tx, Th, Impl> {
+    // first framebuffer for graphics drawing
     gfx: FrameBuffer<'buf, Impl>,
+    // second framebuffer for console mode
     con: Console<'buf, Tx, Impl>,
     touch: Th,
+    // current graphics settings
     cur: GraphicsSetting,
+    // graphics settings for SET/SEL_ATTRS
     saved: [GraphicsSetting; 32],
+    // escape parsing
     escape: Escape,
     escape_seq: [u8; 256],
     // if true, graphics display is currently active
@@ -73,6 +82,7 @@ pub struct DisplayState<'buf, Tx, Th, Impl> {
     fwd_touch: bool,
 }
 
+/// Actions that the interface delegates to higher-level layer.
 pub enum Action<'a> {
     None,
     Reset,
@@ -82,6 +92,7 @@ pub enum Action<'a> {
     WriteEeprom(usize, usize, &'a [u8])
 }
 
+/// State machine for escape-sequence parsing.
 enum Escape {
     None,
     SawOne,
@@ -90,6 +101,8 @@ enum Escape {
     MayBeBooting(usize),
 }
 
+/// Extract an (x, y) position from two bytes.  Since 0<x<480 but 0<y<128
+/// it still fits but the extra bit needs to be shuffled.
 fn pos_from_bytes(pos: &[u8]) -> (u16, u16) {
     ((((pos[0] & 1) as u16) << 8) | (pos[1] as u16),
      (pos[0] >> 1) as u16)
@@ -129,6 +142,11 @@ impl<'buf, Tx: WriteToHost, Th: TouchHandler, Fb: FbImpl> DisplayState<'buf, Tx,
         (&mut self.gfx, &mut self.con, &self.touch)
     }
 
+    /// Main entry point to feed a new byte from remote.
+    ///
+    /// Escape sequences are interpreted (display sequences draw to the graphics
+    /// display, terminal sequences operate on the console), and normal
+    /// characters are drawn to the console.
     pub fn process_byte(&mut self, ch: u8) -> Action {
         match self.escape {
             Escape::None => {
@@ -203,6 +221,10 @@ impl<'buf, Tx: WriteToHost, Th: TouchHandler, Fb: FbImpl> DisplayState<'buf, Tx,
         Action::None
     }
 
+    /// Main entry point to feed a new touch event.
+    ///
+    /// Depending on the touch mode, the event is written to remote or
+    /// switches between graphics and console display.
     pub fn process_touch(&mut self, ev: Th::Event) -> (u16, u16) {
         let (x, y) = self.touch.convert(ev);
         if self.fwd_touch {
@@ -219,7 +241,7 @@ impl<'buf, Tx: WriteToHost, Th: TouchHandler, Fb: FbImpl> DisplayState<'buf, Tx,
         (x, y)
     }
 
-    pub fn process_command(&mut self, len: usize) -> Action {
+    fn process_command(&mut self, len: usize) -> Action {
         let cmd = &self.escape_seq[..len];
         let data_len = cmd.len() - 2;
         match cmd[1] {
@@ -242,7 +264,7 @@ impl<'buf, Tx: WriteToHost, Th: TouchHandler, Fb: FbImpl> DisplayState<'buf, Tx,
                 }
             },
             CMD_SET_COLOR => if data_len >= 4 {
-                self.cur.color.copy_from_slice(&cmd[2..6]);
+                self.cur.pal.copy_from_slice(&cmd[2..6]);
             }
             CMD_SET_CLIP => {
                 if data_len >= 4 {
@@ -256,30 +278,30 @@ impl<'buf, Tx: WriteToHost, Th: TouchHandler, Fb: FbImpl> DisplayState<'buf, Tx,
             }
             CMD_TEXT => {
                 self.gfx.text(&FONTS[self.cur.font as usize], self.cur.posx,
-                              self.cur.posy, &cmd[2..], &self.cur.color);
+                              self.cur.posy, &cmd[2..], &self.cur.pal);
             }
             CMD_LINES => if data_len >= 4 && data_len % 2 == 0 {
                 let mut pos1 = pos_from_bytes(&cmd[2..]);
                 for i in 1..data_len/2 {
                     let pos2 = pos_from_bytes(&cmd[2+2*i..]);
-                    self.gfx.line(pos1.0, pos1.1, pos2.0, pos2.1, self.cur.color[3]);
+                    self.gfx.line(pos1.0, pos1.1, pos2.0, pos2.1, self.cur.pal[3]);
                     pos1 = pos2;
                 }
             }
             CMD_RECT => if data_len >= 4 {
                 let pos1 = pos_from_bytes(&cmd[2..]);
                 let pos2 = pos_from_bytes(&cmd[4..]);
-                self.gfx.rect(pos1.0, pos1.1, pos2.0, pos2.1, self.cur.color[3]);
+                self.gfx.rect(pos1.0, pos1.1, pos2.0, pos2.1, self.cur.pal[3]);
             }
             CMD_IMAGE => if data_len >= 1 {
                 if cmd[2] < IMAGES.len() as u8 {
-                    let (data, size, default_color) = IMAGES[cmd[2] as usize];
-                    let color = if data_len >= 5 {
+                    let (data, size, default_pal) = IMAGES[cmd[2] as usize];
+                    let pal = if data_len >= 5 {
                         [cmd[3], cmd[4], cmd[5], cmd[6]]
                     } else {
-                        default_color
+                        default_pal
                     };
-                    self.gfx.image(self.cur.posx, self.cur.posy, data, size, &color);
+                    self.gfx.image(self.cur.posx, self.cur.posy, data, size, &pal);
                 }
             }
             CMD_CLEAR => if data_len >= 1 {
@@ -303,9 +325,9 @@ impl<'buf, Tx: WriteToHost, Th: TouchHandler, Fb: FbImpl> DisplayState<'buf, Tx,
                     if ystart & 0x80 == 0 {
                         // single coordinate for this point
                         if let Some(y0) = ylast {
-                            self.gfx.line(x-1, y0, x, ystart, self.cur.color[3]);
+                            self.gfx.line(x-1, y0, x, ystart, self.cur.pal[3]);
                         } else {
-                            self.gfx.line(x, ystart, x, ystart, self.cur.color[3]);
+                            self.gfx.line(x, ystart, x, ystart, self.cur.pal[3]);
                         }
                         ylast = Some(ystart);
                     } else {
@@ -318,9 +340,9 @@ impl<'buf, Tx: WriteToHost, Th: TouchHandler, Fb: FbImpl> DisplayState<'buf, Tx,
                                 ylast = None;
                             } else {
                                 if let Some(y0) = ylast {
-                                    self.gfx.line(x-1, y0, x, ystart, self.cur.color[3]);
+                                    self.gfx.line(x-1, y0, x, ystart, self.cur.pal[3]);
                                 }
-                                self.gfx.line(x, ystart, x, yend, self.cur.color[3]);
+                                self.gfx.line(x, ystart, x, yend, self.cur.pal[3]);
                                 ylast = Some(yend);
                             }
                         } else {
@@ -328,9 +350,9 @@ impl<'buf, Tx: WriteToHost, Th: TouchHandler, Fb: FbImpl> DisplayState<'buf, Tx,
                             let ymin = y_coords.next().unwrap_or(0);
                             let ymax = y_coords.next().unwrap_or(0);
                             if let Some(y0) = ylast {
-                                self.gfx.line(x-1, y0, x, ystart, self.cur.color[3]);
+                                self.gfx.line(x-1, y0, x, ystart, self.cur.pal[3]);
                             }
-                            self.gfx.line(x, ymin, x, ymax, self.cur.color[3]);
+                            self.gfx.line(x, ymin, x, ymax, self.cur.pal[3]);
                             ylast = Some(yend);
                         }
                     }

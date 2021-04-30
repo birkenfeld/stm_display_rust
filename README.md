@@ -21,8 +21,9 @@ connected equipment.
 
 ### Build
 
-Using a recent Rust compiler, just do a `cargo build --release` in
-the `firmware` directory.
+Using a recent Rust compiler installed with `rustup`, install the build target
+`thumbv7em-none-eabihf` and then just do a `cargo build --release` in the
+`firmware` directory.
 
 ### Flash
 

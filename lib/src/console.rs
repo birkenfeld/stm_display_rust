@@ -2,7 +2,8 @@
 
 use btoi::btoi;
 
-use crate::framebuf::{CONSOLEFONT, Colors, FrameBuffer, FbImpl};
+use crate::framebuf::{CONSOLEFONT, FrameBuffer, FbImpl};
+use crate::interface::Palette;
 use crate::{WIDTH, HEIGHT, CHARW, CHARH};
 
 const DEFAULT_COLOR: u8 = 7;
@@ -21,7 +22,7 @@ pub trait WriteToHost {
 pub struct Console<'buf, Tx, Fb> {
     fb: FrameBuffer<'buf, Fb>,
     tx: Tx,
-    color: Colors,
+    pal: Palette,
     cx: u16,
     cy: u16,
     need_wrap: bool,
@@ -32,7 +33,7 @@ impl<'buf, Tx: WriteToHost, Fb: FbImpl> Console<'buf, Tx, Fb> {
     pub fn new(mut fb: FrameBuffer<'buf, Fb>, tx: Tx, pos_cursor: fn(u16, u16)) -> Self {
         fb.clear(0);
         fb.clear_scroll_area(0);
-        Self { fb, tx, color: [DEFAULT_BKGRD, 0, 0, DEFAULT_COLOR],
+        Self { fb, tx, pal: [DEFAULT_BKGRD, 0, 0, DEFAULT_COLOR],
                cx: 0, cy: 0, need_wrap: false, pos_cursor }
     }
 
@@ -107,7 +108,7 @@ impl<'buf, Tx: WriteToHost, Fb: FbImpl> Console<'buf, Tx, Fb> {
                     self.process_char(b'\n');
                 }
                 self.fb.text(CONSOLEFONT, self.cx * CHARW, self.cy * CHARH,
-                             &[ch], &self.color);
+                             &[ch], &self.pal);
                 if self.cx < COLS - 1 {
                     self.cx += 1;
                 } else {
@@ -123,15 +124,15 @@ impl<'buf, Tx: WriteToHost, Fb: FbImpl> Console<'buf, Tx, Fb> {
         match end {
             b'm' => while let Some(arg) = args.next() {
                 match arg {
-                    0  => { self.color[3] = DEFAULT_COLOR; self.color[0] = DEFAULT_BKGRD; }
+                    0  => { self.pal[3] = DEFAULT_COLOR; self.pal[0] = DEFAULT_BKGRD; }
                     // XXX should not get reset by color selection
-                    1  => { self.color[3] |= 0b1000; } // XXX: only for 16colors
-                    7  => { self.color.swap(0, 3); }
-                    22 => { self.color[3] &= !0b1000; }
-                    30..=37 => { self.color[3] = arg as u8 - 30; }
-                    40..=47 => { self.color[0] = arg as u8 - 40; }
-                    38 => { self.color[3] = args.nth(1).unwrap_or(0) as u8; }
-                    48 => { self.color[0] = args.nth(1).unwrap_or(0) as u8; }
+                    1  => { self.pal[3] |= 0b1000; } // XXX: only for 16colors
+                    7  => { self.pal.swap(0, 3); }
+                    22 => { self.pal[3] &= !0b1000; }
+                    30..=37 => { self.pal[3] = arg as u8 - 30; }
+                    40..=47 => { self.pal[0] = arg as u8 - 40; }
+                    38 => { self.pal[3] = args.nth(1).unwrap_or(0) as u8; }
+                    48 => { self.pal[0] = args.nth(1).unwrap_or(0) as u8; }
                     _ => {}
                 }
             },

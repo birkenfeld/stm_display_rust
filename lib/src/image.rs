@@ -1,9 +1,12 @@
 //! Stock image definitions.
 
-// data, size, default palette
-type ImageDef = (&'static [u8], (u16, u16), [u8; 4]);
+use crate::interface::Palette;
+
+// Each definition contains the data, the size, and the default palette.
+type ImageDef = (&'static [u8], (u16, u16), Palette);
 
 pub const IMAGES: &[ImageDef] = &[
+    // Image #0 is the customer logo.
     #[cfg(feature = "customer-mlz")]
     (include_bytes!("logo_mlz.dat"), (240, 88), [15, 250, 103, 60]),
     #[cfg(feature = "customer-psi")]
