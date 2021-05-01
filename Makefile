@@ -2,6 +2,10 @@
 
 all:
 	$(MAKE) -C firmware
+	$(MAKE) -C simulator
+
+versionbump:
+	sed -i -e 's,^version = "1\.$(shell echo $$(($(VER) - 1)))\.0",version = "1.'$(VER)'.0",' lib/Cargo.toml firmware/Cargo.toml simulator/Cargo.toml
 
 release-minor:
 	MODE="minor" $(MAKE) release

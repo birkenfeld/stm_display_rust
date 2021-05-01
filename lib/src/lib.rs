@@ -68,6 +68,7 @@ const MODE: u8 = 1;
 /// - 1.19: new plot command, display MAC addr on reinstall
 /// - 1.20: new command to reinstall APU
 /// - 1.21: new default palette for images, PSI customer
+/// - 1.22: fix for the new plot command
 pub const VER_MAJOR: u8 = pkg_version_major!();
 pub const VER_MINOR: u8 = pkg_version_minor!();
 

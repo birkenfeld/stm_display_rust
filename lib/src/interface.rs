@@ -347,13 +347,13 @@ impl<'buf, Tx: WriteToHost, Th: TouchHandler, Fb: FbImpl> DisplayState<'buf, Tx,
                             }
                         } else {
                             // four coordinates: start/end/min/max
-                            let ymin = y_coords.next().unwrap_or(0);
-                            let ymax = y_coords.next().unwrap_or(0);
+                            let ymin = y_coords.next().unwrap_or(0) & 0x7f;
+                            let ymax = y_coords.next().unwrap_or(0) & 0x7f;
                             if let Some(y0) = ylast {
                                 self.gfx.line(x-1, y0, x, ystart, self.cur.pal[3]);
                             }
                             self.gfx.line(x, ymin, x, ymax, self.cur.pal[3]);
-                            ylast = Some(yend);
+                            ylast = Some(yend & 0x7f);
                         }
                     }
                     x += 1;
