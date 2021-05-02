@@ -26,6 +26,9 @@ fn prepare_tty() -> nix::Result<(Receiver<u8>, File)> {
         for byte in fd.bytes() {
             if let Ok(byte) = byte {
                 tx.send(byte).unwrap();
+            } else {
+                // something disconnected, wait for reconnect
+                std::thread::sleep(std::time::Duration::from_millis(50));
             }
         }
     });

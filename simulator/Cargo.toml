@@ -7,10 +7,10 @@ license = "GPL-2.0+"
 edition = "2018"
 
 [dependencies]
-nix = "0.18"
+nix = "0.20"
 minifb = { version = "0.19", default-features = false, features = ["x11"] }
 structopt = "0.3.0"
-crossbeam-channel = "0.4.0"
+crossbeam-channel = "0.5.1"
 display = { path = "../lib" }
 
 [features]
