@@ -3,8 +3,8 @@
 
 extern crate panic_halt;
 
-use stm32f4::stm32f429 as stm;
-use stm::interrupt;
+use hal::pac as stm;
+use hal::pac::interrupt;
 use cortex_m::{asm, interrupt as interrupts, peripheral::{NVIC, SCB}};
 use cortex_m_rt::ExceptionFrame;
 use heapless::spsc::{SingleCore, Queue};

@@ -20,7 +20,6 @@ cortex-m-rt = "0.6.6"
 cortex-m-semihosting = "0.3.2"
 panic-halt = "0.2.0"
 embedded-hal = "0.2.2"
-stm32f4 = "0.13.0"
 
 [dependencies.hal]
 package = "stm32f4xx-hal"
