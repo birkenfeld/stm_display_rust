@@ -1,3 +1,14 @@
+display-firmware (1.22.0) focal; urgency=medium
+
+  * remove mention of run-alternate
+  * README: reference the main controlbox docs
+  * fix coordinates for the new plot command
+  * simulator: fix busy-loop when pty peer disconnects
+  * firmware: dependency bump
+  * import stm32f4 via HAL
+
+ -- Georg Brandl <jenkins@jenkins01.admin.frm2.tum.de>  Mon, 03 May 2021 10:11:57 +0200
+
 display-firmware (1.21.0) focal; urgency=medium
 
   [ Georg Brandl ]
