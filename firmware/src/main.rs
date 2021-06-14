@@ -7,8 +7,7 @@ use hal::pac as stm;
 use hal::pac::interrupt;
 use cortex_m::{asm, interrupt as interrupts, peripheral::{NVIC, SCB}};
 use cortex_m_rt::ExceptionFrame;
-use heapless::spsc::{SingleCore, Queue};
-use heapless::consts::*;
+use heapless::spsc::Queue;
 use hal::time::*;
 use hal::timer::{Timer, Event};
 use hal::serial::{Serial, config::Config as SerialConfig};
@@ -70,10 +69,10 @@ static CURSORBUF: [u8; CHARW as usize] = [CURSOR_COLOR; CHARW as usize];
 static CURSOR_ENABLED: AtomicBool = AtomicBool::new(false);
 
 // UART receive buffer
-static mut UART_RX: Queue<u8, U1024, u16, SingleCore> = unsafe { Queue(heapless::i::Queue::u16_sc()) };
+static mut UART_RX: Queue<u8, 1024> = Queue::new();
 
 // Touch event buffer
-static mut TOUCH_EVT: Queue<u16, U16, u8, SingleCore> = unsafe { Queue(heapless::i::Queue::u8_sc()) };
+static mut TOUCH_EVT: Queue<u16, 16> = Queue::new();
 
 #[cortex_m_rt::entry]
 fn main() -> ! {
