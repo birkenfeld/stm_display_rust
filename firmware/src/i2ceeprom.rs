@@ -127,7 +127,7 @@ impl I2CEEprom {
         // this excludes the unprogrammed case of 0xffff
         if len > 0 && len <= data_buf.len() {
             self.read_at_addr(data_addr, data_buf)?;
-            Ok(data_buf)
+            Ok(&data_buf[..len])
         } else {
             Ok(&[])
         }
