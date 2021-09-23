@@ -5,7 +5,7 @@ all:
 	$(MAKE) -C simulator
 
 versionbump:
-	sed -i -e 's,^version = "1\.$(shell echo $$(($(VER) - 1)))\.0",version = "1.'$(VER)'.0",' lib/Cargo.toml firmware/Cargo.toml simulator/Cargo.toml
+	for p in lib firmware simulator; do (cd $$p; cargo set-version 1.$(VER).0); done
 
 release-minor:
 	MODE="minor" $(MAKE) release
