@@ -8,12 +8,12 @@ use hal::pac::interrupt;
 use cortex_m::{asm, interrupt as interrupts, peripheral::{NVIC, SCB}};
 use cortex_m_rt::ExceptionFrame;
 use heapless::spsc::Queue;
-use hal::time::*;
+use hal::time::{Hertz, MegaHertz};
 use hal::timer::{Timer, Event};
-use hal::serial::{Serial, config::Config as SerialConfig};
+use hal::serial::Serial;
 use hal::rcc::RccExt;
 use hal::gpio::{GpioExt, Speed};
-use embedded_hal::digital::v2::OutputPin;
+use embedded_hal::digital::v2::{OutputPin, PinState};
 use core::sync::atomic::{AtomicBool, Ordering};
 
 #[macro_use]
@@ -99,41 +99,36 @@ fn main() -> ! {
     let gpioe = peri.GPIOE.split();
 
     // LCD enable: set it low first to avoid LCD bleed while setting up timings
-    let mut disp_on = gpioa.pa8.into_push_pull_output();
-    let _ = disp_on.set_low();
+    let mut disp_on = gpioa.pa8.into_push_pull_output_in_state(PinState::Low);
 
     // LCD backlight enable
-    let mut backlight = gpiod.pd12.into_push_pull_output();
-    let _ = backlight.set_high();
+    let _backlight = gpiod.pd12.into_push_pull_output_in_state(PinState::High);
 
     // Output pin connected to Boot0 + capacitor
-    let mut bootpin = gpiob.pb7.into_push_pull_output();
-    let _ = bootpin.set_low();
+    let bootpin = gpiob.pb7.into_push_pull_output_in_state(PinState::Low);
 
     // Set up blinking timer
-    let mut blink_timer = Timer::tim3(peri.TIM3, Hertz(4), clocks);
+    let mut blink_timer = Timer::new(peri.TIM3, &clocks).start_count_down(Hertz(4));
 
     // Set up touch detection timer
-    let mut touch_timer = Timer::tim4(peri.TIM4, Hertz(100), clocks);
+    let mut touch_timer = Timer::new(peri.TIM4, &clocks).start_count_down(Hertz(100));
 
     // External Flash memory via SPI
     #[cfg(feature="test-mode")]
     let mut spi_flash = {
         let cs = gpiob.pb12.into_push_pull_output();
-        let sclk = gpiob.pb13.into_alternate_af5();
-        let miso = gpiob.pb14.into_alternate_af5();
-        let mosi = gpiob.pb15.into_alternate_af5();
-        let spi2 = hal::spi::Spi::spi2(peri.SPI2, (sclk, miso, mosi),
-                                       embedded_hal::spi::MODE_0, Hertz(40_000_000), clocks);
+        let sclk = gpiob.pb13.into_alternate();
+        let miso = gpiob.pb14.into_alternate();
+        let mosi = gpiob.pb15.into_alternate();
+        let spi2 = hal::spi::Spi::new(peri.SPI2, (sclk, miso, mosi),
+                                      embedded_hal::spi::MODE_0, Hertz(40_000_000), clocks);
         spiflash::SPIFlash::new(spi2, cs)
     };
 
     // Console UART (USART #1)
-    let utx = gpioa.pa9 .into_alternate_af7();
-    let urx = gpioa.pa10.into_alternate_af7();
-    let uart = Serial::usart1(peri.USART1, (utx, urx),
-                              SerialConfig::default().baudrate(Bps(115200)),
-                              clocks).unwrap();
+    let utx = gpioa.pa9 .into_alternate();
+    let urx = gpioa.pa10.into_alternate();
+    let uart = Serial::new(peri.USART1, (utx, urx), Default::default(), clocks).unwrap();
     let (console_tx, _) = uart.split();
 
     // I2C EEPROM
@@ -142,28 +137,28 @@ fn main() -> ! {
     let mut eeprom = i2ceeprom::I2CEEprom::new(i2c_scl, i2c_sda);
 
     // LCD pins
-    gpioa.pa3 .into_alternate_af14().set_speed(Speed::VeryHigh); // B5
-    gpioa.pa4 .into_alternate_af14().set_speed(Speed::VeryHigh); // VSYNC
-    gpioa.pa6 .into_alternate_af14().set_speed(Speed::VeryHigh); // G2
-    gpioa.pa11.into_alternate_af14().set_speed(Speed::VeryHigh); // R4
-    gpioa.pa12.into_alternate_af14().set_speed(Speed::VeryHigh); // R5
-    gpiob.pb0 .into_alternate_af9() .set_speed(Speed::VeryHigh); // R3
-    gpiob.pb1 .into_alternate_af9() .set_speed(Speed::VeryHigh); // R6
-    gpiob.pb8 .into_alternate_af14().set_speed(Speed::VeryHigh); // B6
-    gpiob.pb9 .into_alternate_af14().set_speed(Speed::VeryHigh); // B7
-    gpiob.pb10.into_alternate_af14().set_speed(Speed::VeryHigh); // G4
-    gpiob.pb11.into_alternate_af14().set_speed(Speed::VeryHigh); // G5
-    gpioc.pc6 .into_alternate_af14().set_speed(Speed::VeryHigh); // HSYNC
-    gpioc.pc7 .into_alternate_af14().set_speed(Speed::VeryHigh); // G6
-    gpioc.pc10.into_alternate_af14().set_speed(Speed::VeryHigh); // R2
-    gpiod.pd3 .into_alternate_af14().set_speed(Speed::VeryHigh); // G7
-    gpiod.pd6 .into_alternate_af14().set_speed(Speed::VeryHigh); // B2
-    gpiod.pd10.into_alternate_af14().set_speed(Speed::VeryHigh); // B3
-    gpioe.pe11.into_alternate_af14().set_speed(Speed::VeryHigh); // G3
-    gpioe.pe12.into_alternate_af14().set_speed(Speed::VeryHigh); // B4
-    gpioe.pe13.into_alternate_af14().set_speed(Speed::VeryHigh); // DE
-    gpioe.pe14.into_alternate_af14().set_speed(Speed::VeryHigh); // CLK
-    gpioe.pe15.into_alternate_af14().set_speed(Speed::VeryHigh); // R7
+    gpioa.pa3 .into_alternate::<14>().set_speed(Speed::VeryHigh); // B5
+    gpioa.pa4 .into_alternate::<14>().set_speed(Speed::VeryHigh); // VSYNC
+    gpioa.pa6 .into_alternate::<14>().set_speed(Speed::VeryHigh); // G2
+    gpioa.pa11.into_alternate::<14>().set_speed(Speed::VeryHigh); // R4
+    gpioa.pa12.into_alternate::<14>().set_speed(Speed::VeryHigh); // R5
+    gpiob.pb0 .into_alternate::< 9>().set_speed(Speed::VeryHigh); // R3
+    gpiob.pb1 .into_alternate::< 9>().set_speed(Speed::VeryHigh); // R6
+    gpiob.pb8 .into_alternate::<14>().set_speed(Speed::VeryHigh); // B6
+    gpiob.pb9 .into_alternate::<14>().set_speed(Speed::VeryHigh); // B7
+    gpiob.pb10.into_alternate::<14>().set_speed(Speed::VeryHigh); // G4
+    gpiob.pb11.into_alternate::<14>().set_speed(Speed::VeryHigh); // G5
+    gpioc.pc6 .into_alternate::<14>().set_speed(Speed::VeryHigh); // HSYNC
+    gpioc.pc7 .into_alternate::<14>().set_speed(Speed::VeryHigh); // G6
+    gpioc.pc10.into_alternate::<14>().set_speed(Speed::VeryHigh); // R2
+    gpiod.pd3 .into_alternate::<14>().set_speed(Speed::VeryHigh); // G7
+    gpiod.pd6 .into_alternate::<14>().set_speed(Speed::VeryHigh); // B2
+    gpiod.pd10.into_alternate::<14>().set_speed(Speed::VeryHigh); // B3
+    gpioe.pe11.into_alternate::<14>().set_speed(Speed::VeryHigh); // G3
+    gpioe.pe12.into_alternate::<14>().set_speed(Speed::VeryHigh); // B4
+    gpioe.pe13.into_alternate::<14>().set_speed(Speed::VeryHigh); // DE
+    gpioe.pe14.into_alternate::<14>().set_speed(Speed::VeryHigh); // CLK
+    gpioe.pe15.into_alternate::<14>().set_speed(Speed::VeryHigh); // R7
 
     // Extension header pins
     gpioe.pe1.into_pull_down_input();
@@ -184,14 +179,11 @@ fn main() -> ! {
     // Pins for touch screen
     let _touch_yd = gpioc.pc0.into_pull_down_input();
     let _touch_yu = gpioc.pc1.into_floating_input();  // LATER: analog
-    let mut touch_xl = gpioc.pc2.into_push_pull_output();
-    let _ = touch_xl.set_low();
-    let mut touch_xr = gpioc.pc3.into_push_pull_output();
-    let _ = touch_xr.set_high();
+    let _touch_xl = gpioc.pc2.into_push_pull_output_in_state(PinState::Low);
+    let _touch_xr = gpioc.pc3.into_push_pull_output_in_state(PinState::High);
 
     // Pin for resetting the APU
-    let mut reset_pin = gpioc.pc8.into_open_drain_output();
-    let _ = reset_pin.set_high();
+    let mut reset_pin = gpioc.pc8.into_open_drain_output_in_state(PinState::High);
 
     // Set yu input pin to analog mode.  Hardcoded for now!
     modif!(GPIOC.moder: moder1 = @analog);
@@ -445,12 +437,12 @@ fn TIM4() {
 }
 
 #[cortex_m_rt::exception]
-fn HardFault(ef: &ExceptionFrame) -> ! {
+unsafe fn HardFault(ef: &ExceptionFrame) -> ! {
     panic!("HardFault at {:#?}", ef);
 }
 
 #[cortex_m_rt::exception]
-fn DefaultHandler(irqn: i16) {
+unsafe fn DefaultHandler(irqn: i16) {
     panic!("Unhandled exception (IRQn = {})", irqn);
 }
 

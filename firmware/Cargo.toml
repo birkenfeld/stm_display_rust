@@ -23,7 +23,7 @@ embedded-hal = "0.2.2"
 
 [dependencies.hal]
 package = "stm32f4xx-hal"
-version = "0.9.0"
+version = "0.10.0"
 features = ["rt", "stm32f429"]
 
 [dependencies.display]

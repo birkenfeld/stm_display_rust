@@ -55,7 +55,7 @@ impl I2CEEprom {
         self.delay();
         let bit = self.sda.is_high();
         self.scl.set_low();
-        bit.unwrap()
+        bit
     }
 
     fn write_byte(&mut self, mut byte: u8) -> Result<()> {
