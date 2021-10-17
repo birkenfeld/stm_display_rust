@@ -1,7 +1,7 @@
 //! Communication with the SPI flash using DMA.
 #![allow(unused)]
 
-use crate::stm;
+use crate::pac;
 use embedded_hal::digital::v2::OutputPin;
 
 #[link_section = ".sram1bss"]
@@ -47,13 +47,13 @@ impl<SPI, CS: OutputPin> SPIFlash<SPI, CS> {
                minc = true, pinc = false, dbm = false, ct = false, circ = false,
                dir = @memory_to_peripheral, chsel = 0);
         modif!(DMA1.st[4].m0ar: m0a = &mut DMABUF as *const _ as u32);
-        modif!(DMA1.st[4].par: pa = &(*stm::SPI2::ptr()).dr as *const _ as u32);
+        modif!(DMA1.st[4].par: pa = &(*pac::SPI2::ptr()).dr as *const _ as u32);
         // Stream 3: RX
         modif!(DMA1.st[3].cr: msize = 0, psize = 0,
                minc = true, pinc = false, dbm = false, ct = false, circ = false,
                dir = @peripheral_to_memory, chsel = 0);
         modif!(DMA1.st[3].m0ar: m0a = &mut DMABUF as *const _ as u32);
-        modif!(DMA1.st[3].par: pa = &(*stm::SPI2::ptr()).dr as *const _ as u32);
+        modif!(DMA1.st[3].par: pa = &(*pac::SPI2::ptr()).dr as *const _ as u32);
 
         let mut slf = Self { spi, cs, wp_disabled: false };
 

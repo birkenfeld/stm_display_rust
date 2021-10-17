@@ -1,20 +1,20 @@
 #![no_main]
 #![no_std]
 
-extern crate panic_halt;
-
-use hal::pac as stm;
-use hal::pac::interrupt;
+use stm32f4xx_hal::pac;
+use stm32f4xx_hal::pac::interrupt;
 use cortex_m::{asm, interrupt as interrupts, peripheral::{NVIC, SCB}};
 use cortex_m_rt::ExceptionFrame;
 use heapless::spsc::Queue;
-use hal::time::{Hertz, MegaHertz};
-use hal::timer::{Timer, Event};
-use hal::serial::Serial;
-use hal::rcc::RccExt;
-use hal::gpio::{GpioExt, Speed};
+use stm32f4xx_hal::time::{Hertz, MegaHertz};
+use stm32f4xx_hal::timer::{Timer, Event};
+use stm32f4xx_hal::serial::Serial;
+use stm32f4xx_hal::rcc::RccExt;
+use stm32f4xx_hal::gpio::{GpioExt, Speed};
 use embedded_hal::digital::v2::{OutputPin, PinState};
 use core::sync::atomic::{AtomicBool, Ordering};
+
+use panic_halt as _;
 
 #[macro_use]
 mod regutil;
@@ -77,7 +77,7 @@ static mut TOUCH_EVT: Queue<u16, 16> = Queue::new();
 #[cortex_m_rt::entry]
 fn main() -> ! {
     // let mut stdout = hio::hstdout().unwrap();
-    let peri = stm::Peripherals::take().unwrap();
+    let peri = pac::Peripherals::take().unwrap();
 
     // Configure clock
     let mut rcc = peri.RCC.constrain();
@@ -120,8 +120,8 @@ fn main() -> ! {
         let sclk = gpiob.pb13.into_alternate();
         let miso = gpiob.pb14.into_alternate();
         let mosi = gpiob.pb15.into_alternate();
-        let spi2 = hal::spi::Spi::new(peri.SPI2, (sclk, miso, mosi),
-                                      embedded_hal::spi::MODE_0, Hertz(40_000_000), clocks);
+        let spi2 = stm32f4xx_hal::spi::Spi::new(peri.SPI2, (sclk, miso, mosi),
+                            embedded_hal::spi::MODE_0, Hertz(40_000_000), clocks);
         spiflash::SPIFlash::new(spi2, cs)
     };
 
@@ -280,8 +280,8 @@ fn main() -> ! {
 
     // Enable interrupts
     unsafe {
-        NVIC::unmask(stm::Interrupt::TIM3);
-        NVIC::unmask(stm::Interrupt::TIM4);
+        NVIC::unmask(pac::Interrupt::TIM3);
+        NVIC::unmask(pac::Interrupt::TIM4);
     }
     blink_timer.listen(Event::TimeOut);
     touch_timer.listen(Event::TimeOut);
@@ -333,7 +333,7 @@ fn main() -> ! {
 
     // Activate USART receiver
     unsafe {
-        NVIC::unmask(stm::Interrupt::USART1);
+        NVIC::unmask(pac::Interrupt::USART1);
     }
 
     let mut touch_ring = wheelbuf::WheelBuf::new([0u16; 8]);
@@ -390,7 +390,7 @@ fn position_cursor(cx: u16, cy: u16) {
     write!(LTDC.srcr: vbr = true);
 }
 
-#[stm::interrupt]
+#[interrupt]
 fn TIM3() {
     static mut VISIBLE: bool = false;
     // Toggle layer2 on next vsync
@@ -402,7 +402,7 @@ fn TIM3() {
     modif!(TIM3.cr1: cen = true);
 }
 
-#[stm::interrupt]
+#[interrupt]
 fn USART1() {
     let data = read!(USART1.dr: dr) as u8;
     unsafe { let _ = UART_RX.split().0.enqueue(data); }
@@ -417,7 +417,7 @@ struct TouchState {
     idx: usize,
 }
 
-#[stm::interrupt]
+#[interrupt]
 fn TIM4() {
     static mut STATE: TouchState = TouchState { last: false, data: [0; NSAMPLES], idx: 0};
     let data = read!(ADC1.dr: data);
@@ -472,7 +472,7 @@ pub fn reset_apu<P: OutputPin>(reset_pin: &mut P) {
 
 // Implement the various target specific traits for the STM.
 
-pub struct WriteToHost(hal::serial::Tx<stm::USART1>);
+pub struct WriteToHost(stm32f4xx_hal::serial::Tx<pac::USART1>);
 
 impl display::console::WriteToHost for WriteToHost {
     fn write_byte(&mut self, byte: u8) {

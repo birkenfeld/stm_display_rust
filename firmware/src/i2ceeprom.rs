@@ -2,7 +2,7 @@
 #![allow(unused)]
 
 use cortex_m::asm;
-use hal::gpio::{gpioc, Output, OpenDrain};
+use stm32f4xx_hal::gpio::{gpioc, Output, OpenDrain};
 use embedded_hal::digital::v2::{InputPin, OutputPin};
 
 pub type Result<T> = core::result::Result<T, ()>;
