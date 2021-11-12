@@ -125,7 +125,7 @@ display-firmware (1.8.1) unstable; urgency=low
 
   [ Jenkins ]
 
- -- Jenkins <jenkins@debuild.taco.frm2>  Sun, 23 Feb 2020 07:46:36 +0100
+ -- Jenkins <jenkins@debuild.taco.frm2.tum.de>  Sun, 23 Feb 2020 07:46:36 +0100
 
 display-firmware (1.8.0) unstable; urgency=low
 
@@ -139,7 +139,7 @@ display-firmware (1.8.0) unstable; urgency=low
 
   [ Jenkins ]
 
- -- Jenkins <jenkins@debuild.taco.frm2>  Fri, 07 Feb 2020 13:21:09 +0100
+ -- Jenkins <jenkins@debuild.taco.frm2.tum.de>  Fri, 07 Feb 2020 13:21:09 +0100
 
 display-firmware (1.7.3) unstable; urgency=low
 
@@ -148,7 +148,7 @@ display-firmware (1.7.3) unstable; urgency=low
 
   [ Jenkins ]
 
- -- Jenkins <jenkins@debuild.taco.frm2>  Fri, 11 Oct 2019 11:46:00 +0200
+ -- Jenkins <jenkins@debuild.taco.frm2.tum.de>  Fri, 11 Oct 2019 11:46:00 +0200
 
 display-firmware (1.7.2) unstable; urgency=low
 
@@ -158,10 +158,10 @@ display-firmware (1.7.2) unstable; urgency=low
 
   [ Jenkins ]
 
- -- Jenkins <jenkins@debuild.taco.frm2>  Fri, 06 Sep 2019 08:33:41 +0200
+ -- Jenkins <jenkins@debuild.taco.frm2.tum.de>  Fri, 06 Sep 2019 08:33:41 +0200
 
 display-firmware (1.7.1) unstable; urgency=low
 
   [ Jenkins ]
 
- -- Jenkins <jenkins@debuild.taco.frm2>  Mon, 05 Aug 2019 08:43:51 +0200
+ -- Jenkins <jenkins@debuild.taco.frm2.tum.de>  Mon, 05 Aug 2019 08:43:51 +0200
