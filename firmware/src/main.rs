@@ -6,12 +6,12 @@ use stm32f4xx_hal::pac::interrupt;
 use cortex_m::{asm, interrupt as interrupts, peripheral::{NVIC, SCB}};
 use cortex_m_rt::ExceptionFrame;
 use heapless::spsc::Queue;
-use stm32f4xx_hal::time::{Hertz, MegaHertz};
+use stm32f4xx_hal::time::{Bps, Hertz, MegaHertz};
 use stm32f4xx_hal::timer::{Timer, Event};
 use stm32f4xx_hal::serial::Serial;
 use stm32f4xx_hal::rcc::RccExt;
-use stm32f4xx_hal::gpio::{GpioExt, Speed};
-use embedded_hal::digital::v2::{OutputPin, PinState};
+use stm32f4xx_hal::gpio::{GpioExt, PinState, Speed};
+use embedded_hal::digital::v2::OutputPin;
 use core::sync::atomic::{AtomicBool, Ordering};
 
 use panic_halt as _;
@@ -121,14 +121,14 @@ fn main() -> ! {
         let miso = gpiob.pb14.into_alternate();
         let mosi = gpiob.pb15.into_alternate();
         let spi2 = stm32f4xx_hal::spi::Spi::new(peri.SPI2, (sclk, miso, mosi),
-                            embedded_hal::spi::MODE_0, Hertz(40_000_000), clocks);
+                            embedded_hal::spi::MODE_0, Hertz(40_000_000), &clocks);
         spiflash::SPIFlash::new(spi2, cs)
     };
 
     // Console UART (USART #1)
     let utx = gpioa.pa9 .into_alternate();
     let urx = gpioa.pa10.into_alternate();
-    let uart = Serial::new(peri.USART1, (utx, urx), Default::default(), clocks).unwrap();
+    let uart = Serial::new(peri.USART1, (utx, urx), Bps(115_200), &clocks).unwrap();
     let (console_tx, _) = uart.split();
 
     // I2C EEPROM
