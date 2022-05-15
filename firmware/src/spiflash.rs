@@ -2,7 +2,7 @@
 #![allow(unused)]
 
 use crate::pac;
-use embedded_hal::digital::v2::OutputPin;
+use stm32f4xx_hal::hal::digital::v2::OutputPin;
 
 #[link_section = ".sram1bss"]
 static mut DMABUF: [u8; 1030] = [0; 1030];

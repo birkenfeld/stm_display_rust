@@ -6,12 +6,13 @@ use stm32f4xx_hal::pac::interrupt;
 use cortex_m::{asm, interrupt as interrupts, peripheral::{NVIC, SCB}};
 use cortex_m_rt::ExceptionFrame;
 use heapless::spsc::Queue;
-use stm32f4xx_hal::time::{Bps, Hertz, MegaHertz};
+use stm32f4xx_hal::prelude::*;
+use stm32f4xx_hal::hal::digital::v2::OutputPin;
+use stm32f4xx_hal::time::Bps;
 use stm32f4xx_hal::timer::{Timer, Event};
-use stm32f4xx_hal::serial::Serial;
 use stm32f4xx_hal::rcc::RccExt;
-use stm32f4xx_hal::gpio::{GpioExt, PinState, Speed};
-use embedded_hal::digital::v2::OutputPin;
+use stm32f4xx_hal::serial::Serial;
+use stm32f4xx_hal::gpio::{PinState, Speed};
 use core::sync::atomic::{AtomicBool, Ordering};
 
 use panic_halt as _;
@@ -81,10 +82,10 @@ fn main() -> ! {
 
     // Configure clock
     let mut rcc = peri.RCC.constrain();
-    rcc.cfgr = rcc.cfgr.sysclk(MegaHertz(168))
-        .hclk(MegaHertz(168))
-        .pclk1(MegaHertz(42))
-        .pclk2(MegaHertz(84));
+    rcc.cfgr = rcc.cfgr.sysclk(168.MHz())
+        .hclk(168.MHz())
+        .pclk1(42.MHz())
+        .pclk2(84.MHz());
     let clocks = rcc.cfgr.freeze();
 
     // Activate flash caches
@@ -108,10 +109,10 @@ fn main() -> ! {
     let bootpin = gpiob.pb7.into_push_pull_output_in_state(PinState::Low);
 
     // Set up blinking timer
-    let mut blink_timer = Timer::new(peri.TIM3, &clocks).start_count_down(Hertz(4));
+    let mut blink_timer = Timer::new(peri.TIM3, &clocks).counter_hz();
 
     // Set up touch detection timer
-    let mut touch_timer = Timer::new(peri.TIM4, &clocks).start_count_down(Hertz(100));
+    let mut touch_timer = Timer::new(peri.TIM4, &clocks).counter_hz();
 
     // External Flash memory via SPI
     #[cfg(feature="test-mode")]
@@ -121,7 +122,7 @@ fn main() -> ! {
         let miso = gpiob.pb14.into_alternate();
         let mosi = gpiob.pb15.into_alternate();
         let spi2 = stm32f4xx_hal::spi::Spi::new(peri.SPI2, (sclk, miso, mosi),
-                            embedded_hal::spi::MODE_0, Hertz(40_000_000), &clocks);
+                            stm32f4xx_hal::hal::spi::MODE_0, 40.MHz(), &clocks);
         spiflash::SPIFlash::new(spi2, cs)
     };
 
@@ -283,8 +284,10 @@ fn main() -> ! {
         NVIC::unmask(pac::Interrupt::TIM3);
         NVIC::unmask(pac::Interrupt::TIM4);
     }
-    blink_timer.listen(Event::TimeOut);
-    touch_timer.listen(Event::TimeOut);
+    blink_timer.listen(Event::Update);
+    blink_timer.start(4.Hz()).unwrap();
+    touch_timer.listen(Event::Update);
+    touch_timer.start(100.Hz()).unwrap();
 
     let fbimpls = FbImpl { width: WIDTH, has_cursor: true };
     let console = display::console::Console::new(
@@ -476,7 +479,7 @@ pub struct WriteToHost(stm32f4xx_hal::serial::Tx<pac::USART1>);
 
 impl display::console::WriteToHost for WriteToHost {
     fn write_byte(&mut self, byte: u8) {
-        use embedded_hal::serial::Write;
+        use stm32f4xx_hal::hal::serial::Write;
         let _ = nb::block!(self.0.write(byte));
     }
 }
