@@ -3,13 +3,13 @@ use std::fs::File;
 use std::io::{Read, Write};
 use std::os::unix::io::{AsRawFd, FromRawFd};
 use crossbeam_channel::{unbounded, Receiver};
-use structopt::StructOpt;
+use clap::Parser;
 use nix::{pty, fcntl::OFlag};
 
-#[derive(StructOpt)]
-#[structopt(about = "Box display simulator.")]
+#[derive(Parser)]
+#[clap(author, version, about = "Box display simulator.")]
 pub struct Options {
-    #[structopt(short="x", help="Scale display up by a factor of 2 or 4")]
+    #[clap(short='x', help="Scale display up by a factor of 2 or 4")]
     scale: Option<u8>,
 }
 
@@ -88,7 +88,7 @@ impl display::framebuf::FbImpl for FbImpl<'_> {
 
 
 fn main() {
-    let args = Options::from_args();
+    let args = Options::parse();
 
     // open the pseudo-tty for clients to connect to
     let (rx, fd) = prepare_tty().expect("could not create pseudo tty");
