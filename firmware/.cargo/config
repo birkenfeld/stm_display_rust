@@ -1,5 +1,5 @@
 [target.thumbv7em-none-eabihf]
-runner = "gdb-multiarch"
+runner = "probe-run --chip STM32F429VGTx"
 rustflags = [
     "-C", "link-arg=-Tlink.x",
 ]
