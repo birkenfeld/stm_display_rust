@@ -1,3 +1,19 @@
+display-firmware (1.23.0) focal; urgency=medium
+
+  * update to const-generics heapless
+  * i2ceeprom: fix length of read entry
+  * Use cargo set-version
+  * Update HAL to 0.10 (use const generics etc)
+  * dont rename hal/pac crates/imports anymore
+  * debian: fix email addresses in changelog
+  * Update dependencies
+  * Update HAL to 0.11, cortex-m-rt
+  * firwmare: update to HAL 0.13
+  * simulator: update minifb and use clap 3
+  * fonts: add degree and a few more to "ascii" charset
+
+ -- Georg Brandl <jenkins@jenkins02.admin.frm2.tum.de>  Sun, 22 May 2022 13:43:48 +0200
+
 display-firmware (1.22.0) focal; urgency=medium
 
   * remove mention of run-alternate
