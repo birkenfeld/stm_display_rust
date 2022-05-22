@@ -16,6 +16,7 @@ use stm32f4xx_hal::gpio::{PinState, Speed};
 use core::sync::atomic::{AtomicBool, Ordering};
 
 use panic_halt as _;
+//use panic_semihosting as _;
 
 #[macro_use]
 mod regutil;

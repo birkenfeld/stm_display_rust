@@ -43,7 +43,8 @@ SECTIONS
     . = ALIGN(4);
   } > SRAM3
 }
-INSERT AFTER .bss;
+/* `INSERT AFTER .bss` not possible since cortex-m-rt 0.7 */
+INSERT BEFORE .uninit;
 
 /* Ensure FW_IDENT is put into the binary, at the end. */
 
@@ -55,6 +56,6 @@ SECTIONS
   {
     *(.fw_ident);
     . = ALIGN(4);
-  } > FLASH AT > FLASH
+  } > RAM AT > FLASH
 }
 INSERT AFTER .data;

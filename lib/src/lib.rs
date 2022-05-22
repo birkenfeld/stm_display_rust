@@ -70,6 +70,7 @@ const MODE: u8 = 1;
 /// - 1.21: new default palette for images, PSI customer
 /// - 1.22: fix for the new plot command
 /// - 1.23: add characters in "ascii" charset
+/// - 1.24: no changes
 pub const VER_MAJOR: u8 = pkg_version_major!();
 pub const VER_MINOR: u8 = pkg_version_minor!();
 
