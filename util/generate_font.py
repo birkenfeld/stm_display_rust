@@ -79,6 +79,11 @@ print(f'generating for {family} size {size}')
 
 if cs == 'ascii':
     cs = ['\ufffd'] + [chr(i) for i in range(1, 128)] + ['\ufffd'] * 128
+    # add some specials that are sometimes needed
+    cs[0xe6] = '\u00b5'  # lowercase mu
+    cs[0xf1] = '\u00b1'  # plus-minus
+    cs[0xf8] = '\u00b0'  # degree sign
+    cs[0xfd] = '\u00b2'  # squared
 elif cs == 'cp437':
     cs = [chr(i) for i in CP437]
 elif cs == 'material':
