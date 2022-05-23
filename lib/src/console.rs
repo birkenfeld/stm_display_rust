@@ -44,7 +44,7 @@ impl<'buf, Tx: WriteToHost, Fb: FbImpl> Console<'buf, Tx, Fb> {
     }
 
     pub fn buf(&self) -> &[u8] {
-        &self.fb.buf()
+        self.fb.buf()
     }
 
     pub fn activate(&mut self) {
@@ -61,7 +61,7 @@ impl<'buf, Tx: WriteToHost, Fb: FbImpl> Console<'buf, Tx, Fb> {
         self.dump_byte((val >> 24) as u8);
         self.dump_byte((val >> 16) as u8);
         self.dump_byte((val >>  8) as u8);
-        self.dump_byte((val >>  0) as u8);
+        self.dump_byte( val        as u8);
     }
 
     #[allow(unused)]

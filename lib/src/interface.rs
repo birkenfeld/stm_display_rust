@@ -367,22 +367,22 @@ impl<'buf, Tx: WriteToHost, Th: TouchHandler, Fb: FbImpl> DisplayState<'buf, Tx,
                 self.saved[(cmd[1] - CMD_SAVE_ATTRS) as usize] = self.cur;
             }
             CMD_BOOTMODE => if data_len >= 4 {
-                if &cmd[2..6] == &crate::FW_IDENT[..4] {
+                if cmd[2..6] == crate::FW_IDENT[..4] {
                     return Action::Bootloader;
                 }
             },
             CMD_RESET => if data_len >= 4 {
-                if &cmd[2..6] == &crate::FW_IDENT[..4] {
+                if cmd[2..6] == crate::FW_IDENT[..4] {
                     return Action::Reset;
                 }
             },
             CMD_RESET_APU => if data_len >= 4 {
-                if &cmd[2..6] == &crate::FW_IDENT[..4] {
+                if cmd[2..6] == crate::FW_IDENT[..4] {
                     return Action::ResetApu;
                 }
             },
             CMD_APU_REINSTALL => if data_len >= 4 {
-                if &cmd[2..6] == &crate::FW_IDENT[..4] {
+                if cmd[2..6] == crate::FW_IDENT[..4] {
                     return Action::ApuReinstall;
                 }
             },

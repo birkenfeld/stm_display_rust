@@ -88,7 +88,7 @@ impl<SPI, CS: OutputPin> SPIFlash<SPI, CS> {
         unsafe { &DMABUF[inp.len()..ntotal] }
     }
 
-    pub fn read<'a>(&'a mut self, addr: usize, len: usize) -> &'a [u8] {
+    pub fn read(&mut self, addr: usize, len: usize) -> &[u8] {
         assert!(len <= 1024);
         assert!(addr + len <= 0x20_0000);
         self.transfer(&[OP_READ_HS, (addr >> 16) as u8, (addr >> 8) as u8, addr as u8, 0], len)
@@ -108,7 +108,7 @@ impl<SPI, CS: OutputPin> SPIFlash<SPI, CS> {
     }
 
     pub fn write(&mut self, addr: usize, data: &[u8]) {
-        assert!(data.len() >= 1);
+        assert!(!data.is_empty());
         self.disable_wp();
         // write byte by byte
         for (i, &byte) in (addr..addr+data.len()).zip(data) {

@@ -76,13 +76,13 @@ impl<'buf, Fb: FbImpl> FrameBuffer<'buf, Fb> {
     }
 
     pub fn buf(&self) -> &[u8] {
-        &self.buf
+        self.buf
     }
 
     #[inline(always)]
     fn set_pixel(&mut self, x: u16, y: u16, color: u8) {
         if self.clip1.0 <= x && x <= self.clip2.0 && self.clip1.1 <= y && y <= self.clip2.1 {
-            self.buf.as_mut()[x as usize + (y * self.width) as usize] = color;
+            self.buf[x as usize + (y * self.width) as usize] = color;
         }
     }
 
@@ -199,7 +199,7 @@ impl<'buf, Fb: FbImpl> FrameBuffer<'buf, Fb> {
 
     /// Clear the non-displayed area of the framebuffer.
     pub fn clear_scroll_area(&mut self, color: u8) {
-        for el in &mut self.buf.as_mut()[(self.width*self.height) as usize..] { *el = color; }
+        for el in &mut self.buf[(self.width*self.height) as usize..] { *el = color; }
     }
 
     /// Activate this framebuffer.
