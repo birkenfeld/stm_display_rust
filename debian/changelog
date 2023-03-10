@@ -1,3 +1,12 @@
+display-firmware (1.25.0) focal; urgency=medium
+
+  * cargo clippy
+  * bump versions
+  * rename config file
+  * konami_mode: retry when dhcp does not respond in time
+
+ -- Georg Brandl <jenkins@frm2.tum.de>  Fri, 10 Mar 2023 14:53:56 +0100
+
 display-firmware (1.24.0) focal; urgency=medium
 
   * add change text for 1.23
