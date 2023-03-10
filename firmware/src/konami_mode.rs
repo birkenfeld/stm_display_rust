@@ -54,10 +54,21 @@ pub fn run<P: OutputPin>(disp: &mut DisplayState, reset_pin: &mut P, preset_opt:
 }
 
 
+fn slow_write(con: &mut Console, text: impl IntoIterator<Item=&'static u8>) {
+    // firmware keyboard buffer is only ~15 chars, need to send single
+    // chars and wait for the echo back...
+    for &ch in text {
+        con.write_to_host(&[ch]);
+        con.process_char(recv_uart());
+    }
+}
+
+
 fn respond_to_prompt(con: &mut Console, prompt: &[u8], outbuf: &mut [u8],
-                     reply: impl IntoIterator<Item=&'static u8>) {
+                     reply: impl IntoIterator<Item=&'static u8>,
+                     check_errors: bool) -> bool {
     let mut i = 0;
-    let mut uart_ring = wheelbuf::WheelBuf::new([0u8; 8]);
+    let mut uart_ring = wheelbuf::WheelBuf::new([0u8; 16]);
     loop {
         let ch = recv_uart();
         con.process_char(ch);
@@ -66,14 +77,15 @@ fn respond_to_prompt(con: &mut Console, prompt: &[u8], outbuf: &mut [u8],
             i += 1;
         }
         let _ = uart_ring.push(ch);
-        if uart_ring.iter().eq(prompt) {
-            // firmware keyboard buffer is only ~15 chars, need to send single
-            // chars and wait for the echo back...
-            for &ch in reply {
-                con.write_to_host(&[ch]);
+        if uart_ring.iter().skip(16 - prompt.len()).eq(prompt) {
+            slow_write(con, reply);
+            return true;
+        } else if check_errors && uart_ring.iter().eq(b"https://ipxe.org") {
+            for _ in 0..18 {
+                // slurp until end of message: /abcdefgh)\r\niPXE>_
                 con.process_char(recv_uart());
             }
-            return;
+            return false;
         }
     }
 }
@@ -87,20 +99,25 @@ fn enter_netinstall(gfx: &mut FrameBuffer, con: &mut Console, wipe: bool) {
     gfx.clear(15);
     gfx.text(FONT, 20, 25, b"Rebooting for reinstall...", RED_ON_WHITE);
 
-    respond_to_prompt(con, b"PXE boot", &mut [], b"N");
+    respond_to_prompt(con, b"PXE boot", &mut [], b"N", false);
     gfx.text(FONT, 20, 85, b"PXE", BLACK_ON_WHITE);
-    respond_to_prompt(con, b"autoboot", &mut [], b"\x1b[A\n");
-    respond_to_prompt(con, b"2JiPXE> ", &mut [], b"ifstat net0\n");
+    respond_to_prompt(con, b"autoboot", &mut [], b"\x1b[A\n", false);
+    respond_to_prompt(con, b"iPXE> ", &mut [], b"ifstat net0\n", false);
     let mut outbuf = [0; 24];
-    respond_to_prompt(con, b"\r\niPXE> ", &mut outbuf, b"ifconf -c dhcp net0\n");
+    respond_to_prompt(con, b"iPXE> ", &mut outbuf, b"ifconf -c dhcp net0\n", false);
     gfx.text(FONT, 20, 55, &outbuf[1..], BLACK_ON_WHITE);
     gfx.text(FONT, 20 + 4*8, 85, b"DHCP", BLACK_ON_WHITE);
 
-    // TODO: respond to "No configuration methods succeeded" with dhcp again
-    respond_to_prompt(con, b"..... ok", &mut [], b"imgexec ".iter().chain(
-        if wipe { PXE_SCRIPT_WIPE } else { PXE_SCRIPT }
-    ).chain(b"\n"));
-    gfx.text(FONT, 20 + 9*8, 85, b"IMG", BLACK_ON_WHITE);
+    loop {
+        let exec_cmd = b"imgexec ".iter().chain(
+            if wipe { PXE_SCRIPT_WIPE } else { PXE_SCRIPT }).chain(b"\n");
+        if respond_to_prompt(con, b".. ok\r\niPXE> ", &mut [], exec_cmd, true) {
+            gfx.text(FONT, 20 + 9*8, 85, b"IMG", BLACK_ON_WHITE);
+            return;
+            // PXE is booting, back to normal mode to let the user know what's happening
+        }
 
-    // PXE is booting, back to normal mode to let the user know what's happening
+        // DHCP got a timeout, try again
+        slow_write(con, b"ifconf -c dhcp net0\n");
+    }
 }

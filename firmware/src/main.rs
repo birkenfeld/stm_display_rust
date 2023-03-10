@@ -78,7 +78,6 @@ static mut TOUCH_EVT: Queue<u16, 16> = Queue::new();
 
 #[cortex_m_rt::entry]
 fn main() -> ! {
-    // let mut stdout = hio::hstdout().unwrap();
     let peri = pac::Peripherals::take().unwrap();
 
     // Configure clock
