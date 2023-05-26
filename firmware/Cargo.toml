@@ -22,7 +22,7 @@ panic-halt = "0.2.0"
 #panic-semihosting = "0.6"
 
 [dependencies.stm32f4xx-hal]
-version = "0.14.0"
+version = "0.16.0"
 features = ["rt", "stm32f429"]
 
 [dependencies.display]
