@@ -76,7 +76,7 @@ fn respond_to_prompt(con: &mut Console, prompt: &[u8], outbuf: &mut [u8],
             outbuf[i] = ch;
             i += 1;
         }
-        let _ = uart_ring.push(ch);
+        uart_ring.push(ch);
         if uart_ring.iter().skip(16 - prompt.len()).eq(prompt) {
             slow_write(con, reply);
             return true;

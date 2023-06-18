@@ -53,6 +53,7 @@ pub trait FbImpl {
     /// Fill rectangle from (x1, y1) up, but *excluding*, (x2, y2).
     fn fill_rect(&mut self, buf: &mut [u8], x1: u16, y1: u16, x2: u16, y2: u16, color: u8);
     /// Copy rectangle from (x1, y1) to (x2, y2) with a size of (nx, ny) pixels.
+    #[allow(clippy::too_many_arguments)]
     fn copy_rect(&mut self, buf: &mut [u8], x1: u16, y1: u16, x2: u16, y2: u16, nx: u16, ny: u16);
     /// Activate this framebuffer.
     fn activate(&self, buf: &mut [u8]);

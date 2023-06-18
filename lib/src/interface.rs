@@ -96,7 +96,7 @@ pub enum Action<'a> {
 enum Escape {
     None,
     SawOne,
-    CSI(usize),
+    Csi(usize),
     Graphics(usize, usize),
     MayBeBooting(usize),
 }
@@ -159,7 +159,7 @@ impl<'buf, Tx: WriteToHost, Th: TouchHandler, Fb: FbImpl> DisplayState<'buf, Tx,
             Escape::SawOne => {
                 self.escape = match ch {
                     ESCAPE => Escape::Graphics(0, 0),
-                    b'[' => Escape::CSI(0),
+                    b'[' => Escape::Csi(0),
                     b'M' => {  // reverse linefeed = insert one line
                         self.con.process_csi(b'L', b"1");
                         Escape::None
@@ -167,8 +167,8 @@ impl<'buf, Tx: WriteToHost, Th: TouchHandler, Fb: FbImpl> DisplayState<'buf, Tx,
                     _ => Escape::None,
                 };
             }
-            Escape::CSI(ref mut pos) => {
-                if (ch >= b'0' && ch <= b'9') || ch == b';' || ch == b'?' {
+            Escape::Csi(ref mut pos) => {
+                if ch.is_ascii_digit() || ch == b';' || ch == b'?' {
                     self.escape_seq[*pos] = ch;
                     *pos += 1;
                     if *pos == self.escape_seq.len() {
@@ -207,8 +207,8 @@ impl<'buf, Tx: WriteToHost, Th: TouchHandler, Fb: FbImpl> DisplayState<'buf, Tx,
                 let p = *pos;
                 if ch != BOOT_STRING[p - 1] {
                     self.escape = Escape::None;
-                    for i in 0..p-1 {
-                        self.process_byte(BOOT_STRING[i]);
+                    for &byte in BOOT_STRING.iter().take(p-1) {
+                        self.process_byte(byte);
                     }
                     return self.process_byte(ch);
                 } else if p == BOOT_STRING.len() {
@@ -258,10 +258,8 @@ impl<'buf, Tx: WriteToHost, Th: TouchHandler, Fb: FbImpl> DisplayState<'buf, Tx,
                 self.cur.posx = x;
                 self.cur.posy = y;
             },
-            CMD_SET_FONT => if data_len >= 1 {
-                if cmd[2] < FONTS.len() as u8 {
-                    self.cur.font = cmd[2];
-                }
+            CMD_SET_FONT => if data_len >= 1 && cmd[2] < FONTS.len() as u8 {
+                self.cur.font = cmd[2];
             },
             CMD_SET_COLOR => if data_len >= 4 {
                 self.cur.pal.copy_from_slice(&cmd[2..6]);
@@ -293,16 +291,14 @@ impl<'buf, Tx: WriteToHost, Th: TouchHandler, Fb: FbImpl> DisplayState<'buf, Tx,
                 let pos2 = pos_from_bytes(&cmd[4..]);
                 self.gfx.rect(pos1.0, pos1.1, pos2.0, pos2.1, self.cur.pal[3]);
             }
-            CMD_IMAGE => if data_len >= 1 {
-                if cmd[2] < IMAGES.len() as u8 {
-                    let (data, size, default_pal) = IMAGES[cmd[2] as usize];
-                    let pal = if data_len >= 5 {
-                        [cmd[3], cmd[4], cmd[5], cmd[6]]
-                    } else {
-                        default_pal
-                    };
-                    self.gfx.image(self.cur.posx, self.cur.posy, data, size, &pal);
-                }
+            CMD_IMAGE => if data_len >= 1 && cmd[2] < IMAGES.len() as u8 {
+                let (data, size, default_pal) = IMAGES[cmd[2] as usize];
+                let pal = if data_len >= 5 {
+                    [cmd[3], cmd[4], cmd[5], cmd[6]]
+                } else {
+                    default_pal
+                };
+                self.gfx.image(self.cur.posx, self.cur.posy, data, size, &pal);
             }
             CMD_CLEAR => if data_len >= 1 {
                 self.gfx.clear(cmd[2]);
@@ -366,25 +362,17 @@ impl<'buf, Tx: WriteToHost, Th: TouchHandler, Fb: FbImpl> DisplayState<'buf, Tx,
             CMD_SAVE_ATTRS ..= CMD_SAVE_ATTRS_MAX => {
                 self.saved[(cmd[1] - CMD_SAVE_ATTRS) as usize] = self.cur;
             }
-            CMD_BOOTMODE => if data_len >= 4 {
-                if cmd[2..6] == crate::FW_IDENT[..4] {
-                    return Action::Bootloader;
-                }
+            CMD_BOOTMODE => if data_len >= 4 && cmd[2..6] == crate::FW_IDENT[..4] {
+                return Action::Bootloader;
             },
-            CMD_RESET => if data_len >= 4 {
-                if cmd[2..6] == crate::FW_IDENT[..4] {
-                    return Action::Reset;
-                }
+            CMD_RESET => if data_len >= 4 && cmd[2..6] == crate::FW_IDENT[..4] {
+                return Action::Reset;
             },
-            CMD_RESET_APU => if data_len >= 4 {
-                if cmd[2..6] == crate::FW_IDENT[..4] {
-                    return Action::ResetApu;
-                }
+            CMD_RESET_APU => if data_len >= 4 && cmd[2..6] == crate::FW_IDENT[..4] {
+                return Action::ResetApu;
             },
-            CMD_APU_REINSTALL => if data_len >= 4 {
-                if cmd[2..6] == crate::FW_IDENT[..4] {
-                    return Action::ApuReinstall;
-                }
+            CMD_APU_REINSTALL => if data_len >= 4 && cmd[2..6] == crate::FW_IDENT[..4] {
+                return Action::ApuReinstall;
             },
             CMD_SET_STARTUP => {
                 return Action::WriteEeprom(0, 64, &cmd[2..]);

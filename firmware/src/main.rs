@@ -277,7 +277,7 @@ fn main() -> ! {
     write!(LTDC.srcr: imr = true);
 
     // Enable display via GPIO too
-    let _ = disp_on.set_high();
+    disp_on.set_high();
 
     // Enable interrupts
     unsafe {
