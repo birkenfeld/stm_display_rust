@@ -11,4 +11,6 @@ pub const IMAGES: &[ImageDef] = &[
     (include_bytes!("logo_mlz.dat"), (240, 88), [15, 250, 103, 60]),
     #[cfg(feature = "customer-psi")]
     (include_bytes!("logo_psi.dat"), (244, 88), [8, 245, 251, 15]),
+    #[cfg(feature = "customer-fau")]
+    (include_bytes!("logo_fau.dat"), (240, 88), [24, 99, 146, 15]),
 ];

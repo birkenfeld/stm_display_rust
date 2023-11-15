@@ -1,6 +1,6 @@
 [package]
 name = "display_simulator"
-version = "1.25.0"
+version = "1.26.0"
 authors = ["Georg Brandl <g.brandl@fz-juelich.de>"]
 description = "Simulator for MLZ control box display"
 license = "GPL-2.0+"
@@ -17,3 +17,4 @@ display = { path = "../lib" }
 default = ["customer-mlz"]
 customer-mlz = ["display/customer-mlz"]
 customer-psi = ["display/customer-psi"]
+customer-fau = ["display/customer-fau"]

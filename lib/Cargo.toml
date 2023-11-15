@@ -1,7 +1,7 @@
 [package]
 name = "display"
 # This is the version used for the firmware version (major.minor)!
-version = "1.25.0"
+version = "1.26.0"
 authors = ["Georg Brandl <g.brandl@fz-juelich.de>"]
 description = "Firmware for MLZ control box display (library)"
 license = "GPL-2.0+"
@@ -16,3 +16,4 @@ pkg-version = "1.0"
 test-mode = []
 customer-mlz = []
 customer-psi = []
+customer-fau = []

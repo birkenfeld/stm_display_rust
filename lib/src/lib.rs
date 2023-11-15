@@ -26,7 +26,10 @@ pub const CHARH: u16 = framebuf::CONSOLEFONT.size().1;
 /// - 0: generic/no customization
 /// - 'M': MLZ
 /// - 'P': PSI
-#[cfg(not(any(feature = "customer-mlz", feature = "customer-psi")))]
+/// - 'F': FAU
+#[cfg(not(any(feature = "customer-mlz",
+              feature = "customer-psi",
+              feature = "customer-fau")))]
 const CUSTOMER: u8 = 0;
 // Here we ensure that we haven't multiple customers selected, since
 // in that case CUSTOMER would be redefined.
@@ -34,6 +37,8 @@ const CUSTOMER: u8 = 0;
 const CUSTOMER: u8 = b'M';
 #[cfg(feature = "customer-psi")]
 const CUSTOMER: u8 = b'P';
+#[cfg(feature = "customer-fau")]
+const CUSTOMER: u8 = b'F';
 
 /// Modes:
 ///
@@ -72,6 +77,7 @@ const MODE: u8 = 1;
 /// - 1.23: add characters in "ascii" charset
 /// - 1.24: no changes
 /// - 1.25: retry DHCP request in display-initiated PXE boot
+/// - 1.26: FAU customer
 pub const VER_MAJOR: u8 = pkg_version_major!();
 pub const VER_MINOR: u8 = pkg_version_minor!();
 

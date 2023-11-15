@@ -17,3 +17,6 @@ install: build
 psi:
 	$(CARGO) build --release --no-default-features --features customer-psi
 	$(OBJCOPY) -Obinary $(ELF) display_fw_psi.bin
+fau:
+	$(CARGO) build --release --no-default-features --features customer-fau
+	$(OBJCOPY) -Obinary $(ELF) display_fw_fau.bin
