@@ -1,6 +1,6 @@
 //! Implementation of the "special" override mode of the display.
 
-use stm32f4xx_hal::hal::digital::v2::OutputPin;
+use stm32f4xx_hal::hal::digital::OutputPin;
 use display::interface::TouchHandler;
 use display::framebuf::{MEDIUMFONT as FONT, BLACK_ON_WHITE, RED_ON_WHITE};
 use crate::{DisplayState, Console, FrameBuffer, recv_uart, clear_uart, reset_apu,

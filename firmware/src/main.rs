@@ -7,7 +7,7 @@ use cortex_m::{asm, interrupt as interrupts, peripheral::{NVIC, SCB}};
 use cortex_m_rt::ExceptionFrame;
 use heapless::spsc::Queue;
 use stm32f4xx_hal::prelude::*;
-use stm32f4xx_hal::hal::digital::v2::OutputPin;
+use stm32f4xx_hal::hal::digital::OutputPin;
 use stm32f4xx_hal::time::Bps;
 use stm32f4xx_hal::timer::{Timer, Event};
 use stm32f4xx_hal::rcc::RccExt;
@@ -479,7 +479,6 @@ pub struct WriteToHost(stm32f4xx_hal::serial::Tx<pac::USART1>);
 
 impl display::console::WriteToHost for WriteToHost {
     fn write_byte(&mut self, byte: u8) {
-        use stm32f4xx_hal::hal::serial::Write;
         let _ = nb::block!(self.0.write(byte));
     }
 }

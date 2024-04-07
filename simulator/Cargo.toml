@@ -7,8 +7,8 @@ license = "GPL-2.0+"
 edition = "2021"
 
 [dependencies]
-nix = "0.26"
-minifb = { version = "0.24", default-features = false, features = ["x11"] }
+nix = { version = "0.28", features = ["fs", "term"] }
+minifb = { version = "0.25", default-features = false, features = ["x11"] }
 clap = { version = "4.1", features = ["derive"] }
 crossbeam-channel = "0.5.1"
 display = { path = "../lib" }
