@@ -16,28 +16,28 @@ macro_rules! bitset {
 #[macro_export]
 macro_rules! write {
     ($p:ident . $($r:ident $([$ix:expr])?).+ : $($tt:tt)+) => {
-        unsafe { (*pac::$p::ptr()).$($r$([$ix])?).+.write(|w| bitset!(w; $($tt)+)); }
+        unsafe { (*pac::$p::ptr()).$($r($($ix)?)).+.write(|w| bitset!(w; $($tt)+)); }
     };
 }
 
 #[macro_export]
 macro_rules! read {
     ($p:ident .  $($r:ident $([$ix:expr])?).+ : $bit:ident) => {
-        unsafe { (*pac::$p::ptr()).$($r$([$ix])?).+.read().$bit().bits() }
+        unsafe { (*pac::$p::ptr()).$($r($($ix)?)).+.read().$bit().bits() }
     };
 }
 
 #[macro_export]
 macro_rules! readb {
     ($p:ident .  $($r:ident $([$ix:expr])?).+ : $bit:ident) => {
-        unsafe { (*pac::$p::ptr()).$($r$([$ix])?).+.read().$bit().bit_is_set() }
+        unsafe { (*pac::$p::ptr()).$($r($($ix)?)).+.read().$bit().bit_is_set() }
     };
 }
 
 #[macro_export]
 macro_rules! modif {
     ($p:ident . $($r:ident $([$ix:expr])?).+ : $($tt:tt)+) => {
-        unsafe { (*pac::$p::ptr()).$($r$([$ix])?).+.modify(|_, w| bitset!(w; $($tt)+)); }
+        unsafe { (*pac::$p::ptr()).$($r($($ix)?)).+.modify(|_, w| bitset!(w; $($tt)+)); }
     };
 }
 
@@ -52,9 +52,9 @@ macro_rules! pulse {
 #[macro_export]
 macro_rules! wait_for {
     ($p:ident . $($r:ident $([$ix:expr])?).+ : $bit:ident) => {
-        unsafe { while (*pac::$p::ptr()).$($r$([$ix])?).+.read().$bit().bit_is_clear() {} }
+        unsafe { while (*pac::$p::ptr()).$($r()$([$ix])?).+.read().$bit().bit_is_clear() {} }
     };
     ($p:ident . $($r:ident $([$ix:expr])?).+ : ! $bit:ident) => {
-        unsafe { while (*pac::$p::ptr()).$($r$([$ix])?).+.read().$bit().bit_is_set() {} }
+        unsafe { while (*pac::$p::ptr()).$($r()$([$ix])?).+.read().$bit().bit_is_set() {} }
     };
 }
