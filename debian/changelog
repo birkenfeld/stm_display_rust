@@ -1,3 +1,9 @@
+display-firmware (1.26.0) focal; urgency=medium
+
+  * Add customer fau
+
+ -- Georg Brandl <jenkins@frm2.tum.de>  Wed, 15 Nov 2023 14:53:56 +0100
+
 display-firmware (1.25.0) focal; urgency=medium
 
   * cargo clippy
