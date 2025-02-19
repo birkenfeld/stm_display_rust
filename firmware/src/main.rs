@@ -1,5 +1,6 @@
 #![no_main]
 #![no_std]
+#![allow(static_mut_refs)]
 
 use stm32f4xx_hal::pac;
 use stm32f4xx_hal::pac::interrupt;
