@@ -66,7 +66,7 @@ fn slow_write(con: &mut Console, text: impl IntoIterator<Item=&'static u8>) {
 
 fn respond_to_prompt(con: &mut Console, prompt: &[u8], outbuf: &mut [u8],
                      reply: impl IntoIterator<Item=&'static u8>,
-                     check_errors: bool) -> bool {
+                     retry_prompt: bool, check_errors: bool) -> bool {
     let mut i = 0;
     let mut uart_ring = wheelbuf::WheelBuf::new([0u8; 16]);
     loop {
@@ -86,6 +86,10 @@ fn respond_to_prompt(con: &mut Console, prompt: &[u8], outbuf: &mut [u8],
                 con.process_char(recv_uart());
             }
             return false;
+        } else if retry_prompt && uart_ring.iter().skip(14).eq(b"> ") {
+            // sometimes the first iPXE> prompt is interrupted by ANSI
+            // cursor movement, retry
+            slow_write(con, b"\n");
         }
     }
 }
@@ -99,19 +103,19 @@ fn enter_netinstall(gfx: &mut FrameBuffer, con: &mut Console, wipe: bool) {
     gfx.clear(15);
     gfx.text(FONT, 20, 25, b"Rebooting for reinstall...", RED_ON_WHITE);
 
-    respond_to_prompt(con, b"PXE boot", &mut [], b"N", false);
+    respond_to_prompt(con, b"PXE boot", &mut [], b"N", false, false);
     gfx.text(FONT, 20, 85, b"PXE", BLACK_ON_WHITE);
-    respond_to_prompt(con, b"autoboot", &mut [], b"\x1b[A\n", false);
-    respond_to_prompt(con, b"iPXE> ", &mut [], b"ifstat net0\n", false);
+    respond_to_prompt(con, b"autoboot", &mut [], b"\x1b[A\n", false, false);
+    respond_to_prompt(con, b"iPXE> ", &mut [], b"ifstat net0\n", true, false);
     let mut outbuf = [0; 24];
-    respond_to_prompt(con, b"iPXE> ", &mut outbuf, b"ifconf -c dhcp net0\n", false);
+    respond_to_prompt(con, b"iPXE> ", &mut outbuf, b"ifconf -c dhcp net0\n", false, false);
     gfx.text(FONT, 20, 55, &outbuf[1..], BLACK_ON_WHITE);
     gfx.text(FONT, 20 + 4*8, 85, b"DHCP", BLACK_ON_WHITE);
 
     loop {
         let exec_cmd = b"imgexec ".iter().chain(
             if wipe { PXE_SCRIPT_WIPE } else { PXE_SCRIPT }).chain(b"\n");
-        if respond_to_prompt(con, b".. ok\r\niPXE> ", &mut [], exec_cmd, true) {
+        if respond_to_prompt(con, b".. ok\r\niPXE> ", &mut [], exec_cmd, false, true) {
             gfx.text(FONT, 20 + 9*8, 85, b"IMG", BLACK_ON_WHITE);
             return;
             // PXE is booting, back to normal mode to let the user know what's happening
