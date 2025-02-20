@@ -1,6 +1,6 @@
 [package]
 name = "display_simulator"
-version = "1.26.0"
+version = "1.27.0"
 authors = ["Georg Brandl <g.brandl@fz-juelich.de>"]
 description = "Simulator for MLZ control box display"
 license = "GPL-2.0+"

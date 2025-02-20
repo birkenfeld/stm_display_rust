@@ -1,3 +1,15 @@
+display-firmware (1.27.0) jammy; urgency=medium
+
+  * update dependencies
+  * update dependencies
+  * update to HAL 0.22
+  * fix test mode
+  * update dependencies
+  * add missing changelog entry
+  * update, fix warnings
+
+ -- Georg Brandl <jenkins@frm2.tum.de>  Thu, 20 Feb 2025 19:52:00 +0100
+
 display-firmware (1.26.0) focal; urgency=medium
 
   * Add customer fau
