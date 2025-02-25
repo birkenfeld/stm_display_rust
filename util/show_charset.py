@@ -17,11 +17,22 @@ height = {0: 8, 1: 16, 2: 40, 3: 120, 4: 16}
 width = {0: 6, 1: 8, 2: 20, 3: 60, 4: 16}
 perline = 480//width[f]
 
-if f == 3:
+if f == 3:  # very large
     d.set_pos((0, 0))
     d.text('123456789')
     d.set_pos((0, 64))
     d.text('.eE%?+-')
+
+elif f == 4:  # symbols
+    for i in range(4):
+        d.set_font(4)
+        d.set_color([15, 7, 8, 0][::-1])
+        d.set_pos((0, 2*i*height[f]))
+        d.raw_text(bytes(range(i*perline, min(i*perline+perline, 256))))
+        d.set_font(1)
+        d.set_pos((width[f]//4, (2*i + 1)*height[f]))
+        d.set_color([7, 8, 8, 0][::-1])
+        d.raw_text(bytes(sum(([ch, 32] for ch in range(i*perline, min(i*perline+perline, 256))), [])))
 
 else:
     for i in range(0, 128//height[f]):
