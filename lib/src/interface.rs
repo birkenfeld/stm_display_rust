@@ -147,7 +147,7 @@ impl<'buf, Tx: WriteToHost, Th: TouchHandler, Fb: FbImpl> DisplayState<'buf, Tx,
     /// Escape sequences are interpreted (display sequences draw to the graphics
     /// display, terminal sequences operate on the console), and normal
     /// characters are drawn to the console.
-    pub fn process_byte(&mut self, ch: u8) -> Action {
+    pub fn process_byte(&mut self, ch: u8) -> Action<'_> {
         match self.escape {
             Escape::None => {
                 if ch == ESCAPE {
@@ -241,7 +241,7 @@ impl<'buf, Tx: WriteToHost, Th: TouchHandler, Fb: FbImpl> DisplayState<'buf, Tx,
         (x, y)
     }
 
-    fn process_command(&mut self, len: usize) -> Action {
+    fn process_command(&mut self, len: usize) -> Action<'_> {
         let cmd = &self.escape_seq[..len];
         let data_len = cmd.len() - 2;
         match cmd[1] {
