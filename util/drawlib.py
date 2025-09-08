@@ -18,6 +18,7 @@ CMD_IMAGE = 0x43
 CMD_TEXT = 0x44
 CMD_COPYRECT = 0x45
 CMD_PLOT = 0x46
+CMD_PIXELS = 0x47
 
 CMD_TOUCH = 0x50
 CMD_TOUCH_MODE = 0x51
@@ -37,6 +38,29 @@ CMD_RESET_APU = 0xf4
 CMD_APU_REINSTALL = 0xf5
 
 RESET_MAGIC = bytes([0xcb, 0xef, 0x20, 0x18])
+
+
+class Colors:
+    LUT = []
+    for v in range(16):
+        b = (v & 4) != 0
+        g = (v & 2) != 0
+        r = (v & 1) != 0
+        i = (v & 8) != 0
+        LUT.append((0x55 * ((r << 1) | i), 0x55 * ((g << 1) | i),
+                    0x55 * ((b << 1) | i)))
+    for r in range(6):
+        for g in range(6):
+            for b in range(6):
+                LUT.append((0x33 * r, 0x33 * g, 0x33 * b))
+    for g in range(24):
+        gray = 8 + 10 * g
+        LUT.append((gray, gray, gray))
+
+    @staticmethod
+    def closest(rgb):
+        return sorted((sum(abs(c - v) for c, v in zip(Colors.LUT[i], rgb)), i)
+                      for i in range(256))[0][1]
 
 
 class Display:
@@ -171,3 +195,7 @@ class Display:
             self.send(CMD_IMAGE, bytes([i] + colors))
         else:
             self.send(CMD_IMAGE, bytes([i]))
+
+    def pixels(self, xy1, wh, scale, colors):
+        self.send(CMD_PIXELS, self._pos(xy1) + self._pos(wh) +
+                  self._pos(scale) + bytes(colors))

@@ -24,6 +24,7 @@ const CMD_IMAGE:         u8 = 0x43;
 const CMD_TEXT:          u8 = 0x44;
 const CMD_COPYRECT:      u8 = 0x45;
 const CMD_PLOT:          u8 = 0x46;
+const CMD_PIXELS:        u8 = 0x47;
 
 const CMD_TOUCH:         u8 = 0x50;  // only for replies
 const CMD_TOUCH_MODE:    u8 = 0x51;
@@ -308,6 +309,26 @@ impl<'buf, Tx: WriteToHost, Th: TouchHandler, Fb: FbImpl> DisplayState<'buf, Tx,
                 let pos2 = pos_from_bytes(&cmd[4..]);
                 let pos3 = pos_from_bytes(&cmd[6..]);
                 self.gfx.copy_rect(pos1.0, pos1.1, pos2.0, pos2.1, pos3.0, pos3.1);
+            }
+            CMD_PIXELS => if data_len >= 6 {
+                let (x0, y0) = pos_from_bytes(&cmd[2..]);
+                let (nx, ny) = pos_from_bytes(&cmd[4..]);
+                let (sx, sy) = pos_from_bytes(&cmd[6..]);
+                let (sx, sy) = (sx.max(1), sy.max(1));
+                let (dx, dy) = (nx.saturating_mul(sx), ny.saturating_mul(sy));
+                let mut colors = cmd[8..].iter();
+                let fg_color = self.cur.pal[3];
+                let use_rects = sx > 1 || sy > 1;
+                for y in (y0..y0 + dy).step_by(sy as _) {
+                    for x in (x0..x0 + dx).step_by(sx as _) {
+                        let color = *colors.next().unwrap_or(&fg_color);
+                        if use_rects {
+                            self.gfx.rect(x, y, x + sx - 1, y + sy - 1, color);
+                        } else {
+                            self.gfx.set_pixel(x, y, color);
+                        }
+                    }
+                }
             }
             CMD_PLOT => if data_len >= 3 {
                 // Extended plot command that can handle a range of y values for

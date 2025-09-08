@@ -81,7 +81,7 @@ impl<'buf, Fb: FbImpl> FrameBuffer<'buf, Fb> {
     }
 
     #[inline(always)]
-    fn set_pixel(&mut self, x: u16, y: u16, color: u8) {
+    pub fn set_pixel(&mut self, x: u16, y: u16, color: u8) {
         if self.clip1.0 <= x && x <= self.clip2.0 && self.clip1.1 <= y && y <= self.clip2.1 {
             self.buf[x as usize + (y * self.width) as usize] = color;
         }

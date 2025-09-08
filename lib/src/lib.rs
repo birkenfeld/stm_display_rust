@@ -70,7 +70,7 @@ const MODE: u8 = 1;
 /// - 1.16: change medium font size
 /// - 1.17: more console terminal features
 /// - 1.18: more console escape sequences
-/// - 1.19: new plot command, display MAC addr on reinstall
+/// - 1.19: new PLOT command, display MAC addr on reinstall
 /// - 1.20: new command to reinstall APU
 /// - 1.21: new default palette for images, PSI customer
 /// - 1.22: fix for the new plot command
@@ -79,6 +79,7 @@ const MODE: u8 = 1;
 /// - 1.25: retry DHCP request in display-initiated PXE boot
 /// - 1.26: FAU customer
 /// - 1.27: work extra hard to catch prompt in PXE boot
+/// - 1.28: new PIXELS command
 pub const VER_MAJOR: u8 = pkg_version_major!();
 pub const VER_MINOR: u8 = pkg_version_minor!();
 
