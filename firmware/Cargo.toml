@@ -14,7 +14,7 @@ debug = true
 [dependencies]
 nb = "1.0"
 wheelbuf = "0.2"
-heapless = "0.8"
+heapless = "0.9"
 cortex-m = "0.7.7"
 cortex-m-rt = "0.7.3"
 panic-halt = "1.0"

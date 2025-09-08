@@ -1,7 +1,7 @@
 use std::cell::Cell;
 use std::fs::File;
 use std::io::{Read, Write};
-use std::os::unix::io::{AsRawFd, FromRawFd};
+use std::os::fd::{AsFd, OwnedFd};
 use crossbeam_channel::{unbounded, Receiver};
 use clap::Parser;
 use nix::{pty, fcntl::OFlag};
@@ -18,11 +18,11 @@ fn prepare_tty() -> nix::Result<(Receiver<u8>, File)> {
     pty::grantpt(&master)?;
     pty::unlockpt(&master)?;
     println!("Terminal open, connect clients to {}", pty::ptsname_r(&master)?);
-    let fd = unsafe { File::from_raw_fd(nix::unistd::dup(master.as_raw_fd())?) };
+    let fd = File::from(nix::unistd::dup(master.as_fd())?);
 
     let (tx, rx) = unbounded();
     std::thread::spawn(move || {
-        let fd = unsafe { File::from_raw_fd(master.as_raw_fd()) };
+        let fd = File::from(OwnedFd::from(master));
         for byte in fd.bytes() {
             if let Ok(byte) = byte {
                 tx.send(byte).unwrap();
